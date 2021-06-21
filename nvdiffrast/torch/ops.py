@@ -179,7 +179,7 @@ class _rasterize_func(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dy, ddb):
-        pos, tri, out = ctx.saved_variables
+        pos, tri, out = ctx.saved_tensors
         if ctx.saved_grad_db:
             g_pos = _get_plugin().rasterize_grad_db(pos, tri, out, dy, ddb)
         else:
@@ -321,7 +321,7 @@ class _interpolate_func_da(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dy, dda):
-        attr, rast, tri, rast_db = ctx.saved_variables
+        attr, rast, tri, rast_db = ctx.saved_tensors
         diff_attrs_all, diff_attrs_list = ctx.saved_misc
         g_attr, g_rast, g_rast_db = _get_plugin().interpolate_grad_da(attr, rast, tri, dy, rast_db, dda, diff_attrs_all, diff_attrs_list)
         return g_attr, g_rast, None, g_rast_db, None, None
@@ -336,7 +336,7 @@ class _interpolate_func(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dy, _):
-        attr, rast, tri = ctx.saved_variables
+        attr, rast, tri = ctx.saved_tensors
         g_attr, g_rast = _get_plugin().interpolate_grad(attr, rast, tri, dy)
         return g_attr, g_rast, None
 
@@ -415,7 +415,7 @@ class _texture_func_mip(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dy):
-        tex, uv, uv_da, mip_level_bias, *mip_stack = ctx.saved_variables
+        tex, uv, uv_da, mip_level_bias, *mip_stack = ctx.saved_tensors
         filter_mode, mip_wrapper, filter_mode_enum, boundary_mode_enum = ctx.saved_misc
         if filter_mode == 'linear-mipmap-linear':
             g_tex, g_uv, g_uv_da, g_mip_level_bias, g_mip_stack = _get_plugin().texture_grad_linear_mipmap_linear(tex, uv, dy, uv_da, mip_level_bias, mip_wrapper, mip_stack, filter_mode_enum, boundary_mode_enum)
@@ -435,7 +435,7 @@ class _texture_func(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dy):
-        tex, uv = ctx.saved_variables
+        tex, uv = ctx.saved_tensors
         filter_mode, filter_mode_enum, boundary_mode_enum = ctx.saved_misc
         if filter_mode == 'linear':
             g_tex, g_uv = _get_plugin().texture_grad_linear(tex, uv, dy, filter_mode_enum, boundary_mode_enum)
@@ -580,7 +580,7 @@ class _antialias_func(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, dy):
-        color, rast, pos, tri = ctx.saved_variables
+        color, rast, pos, tri = ctx.saved_tensors
         pos_gradient_boost, work_buffer = ctx.saved_misc
         g_color, g_pos = _get_plugin().antialias_grad(color, rast, pos, tri, dy, work_buffer)
         if pos_gradient_boost != 1.0:

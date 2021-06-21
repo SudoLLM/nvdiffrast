@@ -557,4 +557,36 @@ void rasterizeCopyResults(NVDR_CTX_ARGS, RasterizeGLState& s, cudaStream_t strea
     NVDR_CHECK_CUDA_ERROR(cudaGraphicsUnmapResources(num_outputs, s.cudaColorBuffer, stream));
 }
 
+void rasterizeReleaseBuffers(NVDR_CTX_ARGS, RasterizeGLState& s)
+{
+    int num_outputs = s.enableDB ? 2 : 1;
+
+    if (s.cudaPosBuffer)
+    {
+        NVDR_CHECK_CUDA_ERROR(cudaGraphicsUnregisterResource(s.cudaPosBuffer));
+        s.cudaPosBuffer = 0;
+    }
+
+    if (s.cudaTriBuffer)
+    {
+        NVDR_CHECK_CUDA_ERROR(cudaGraphicsUnregisterResource(s.cudaTriBuffer));
+        s.cudaTriBuffer = 0;
+    }
+
+    for (int i=0; i < num_outputs; i++)
+    {
+        if (s.cudaColorBuffer[i])
+        {
+            NVDR_CHECK_CUDA_ERROR(cudaGraphicsUnregisterResource(s.cudaColorBuffer[i]));
+            s.cudaColorBuffer[i] = 0;
+        }
+    }
+
+    if (s.cudaPrevOutBuffer)
+    {
+        NVDR_CHECK_CUDA_ERROR(cudaGraphicsUnregisterResource(s.cudaPrevOutBuffer));
+        s.cudaPrevOutBuffer = 0;
+    }
+}
+
 //------------------------------------------------------------------------
