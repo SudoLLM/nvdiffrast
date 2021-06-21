@@ -177,7 +177,10 @@ def fit_env_phong(max_iter          = 1000,
             color_opt = torch.where(mask, one_tensor, color_opt)
             result_image = color_opt.detach()[0].cpu().numpy()
             if display_image:
-                util.display_image(result_image, size=display_res, title='%d / %d' % (it, max_iter))
+                import cv2
+                cv2.imshow('img', result_image[..., [2, 1, 0]])
+                cv2.waitKey(1)
+                # util.display_image(result_image, size=display_res, title='%d / %d' % (it, max_iter))
             if save_mp4:
                 writer.append_data(np.clip(np.rint(result_image*255.0), 0, 255).astype(np.uint8))
 

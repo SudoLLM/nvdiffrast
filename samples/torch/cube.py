@@ -147,7 +147,10 @@ def fit_cube(max_iter          = 5000,
                 result_image = make_grid(np.stack([img_o, img_b, img_d.detach().cpu().numpy(), img_r.cpu().numpy()]))
 
                 if display_image:
-                    util.display_image(result_image, size=display_res, title='%d / %d' % (it, max_iter))
+                    # util.display_image(result_image, size=display_res, title='%d / %d' % (it, max_iter))
+                    import cv2
+                    cv2.imshow('img', result_image[..., [2, 1, 0]])
+                    cv2.waitKey(1)
                 if save_mp4:
                     writer.append_data(np.clip(np.rint(result_image*255.0), 0, 255).astype(np.uint8))
 

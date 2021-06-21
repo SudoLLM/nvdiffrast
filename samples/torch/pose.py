@@ -240,7 +240,10 @@ def fit_pose(max_iter           = 10000,
                 result_image = np.concatenate([img_ref, img_best, img_opt], axis=1)
 
                 if display_image:
-                    util.display_image(result_image, size=display_res, title='(%d) %d / %d' % (rep, it, max_iter))
+                    # util.display_image(result_image, size=display_res, title='(%d) %d / %d' % (rep, it, max_iter))
+                    import cv2
+                    cv2.imshow('img', result_image[..., [2, 1, 0]])
+                    cv2.waitKey(1)
                 if save_mp4:
                     writer.append_data(np.clip(np.rint(result_image*255.0), 0, 255).astype(np.uint8))
 

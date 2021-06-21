@@ -160,7 +160,10 @@ def fit_earth(max_iter          = 20000,
                 result_image = render(glctx, a_mvp, vtx_pos, pos_idx, vtx_uv, uv_idx, tex_opt, res, enable_mip, max_mip_level)[0].cpu().numpy()
 
                 if display_image:
-                    util.display_image(result_image, size=display_res, title='%d / %d' % (it, max_iter))
+                    # util.display_image(result_image, size=display_res, title='%d / %d' % (it, max_iter))
+                    import cv2
+                    cv2.imshow('img', result_image[..., [2, 1, 0]])
+                    cv2.waitKey(1)
                 if save_image:
                     util.save_image(out_dir + '/' + (imgsave_fn % it), result_image)
 
