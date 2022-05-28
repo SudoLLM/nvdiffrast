@@ -1,8 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include "../common/common.h"
-#include "../common/glutil.h"
-#include "../common/glutil_extlist.h"
+#include <cuda_runtime.h>
 
 struct GemotryDescriptor {
     int32_t W, H;

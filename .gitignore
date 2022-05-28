@@ -1,3 +1,7 @@
 __pycache__
 .DS_Store
 build
+data
+test*
+*.egg-info
+meshio

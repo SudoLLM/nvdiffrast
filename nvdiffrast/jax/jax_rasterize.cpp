@@ -1,4 +1,3 @@
-#include "../common/common.h"
 #include "../common/rasterize.h"
 #include "kernel_helpers.h"
 #include "jax_rasterize.h"
@@ -45,7 +44,7 @@ void rasterize_fwd(
     bool init_ctx = !g_gl_state.glFBO;
     if (init_ctx) {
         int cuda_device_idx = 0;  // TODO: get info
-        rasterizeInitGLContext(0, g_glState, cuda_device_idx); // In common/rasterize.cpp
+        rasterizeInitGLContext(0, g_gl_state, cuda_device_idx); // In common/rasterize.cpp
     }
     else {
         setGLContext(g_gl_state.glctx); // (Re-)Activate GL context.
@@ -63,7 +62,7 @@ void rasterize_fwd(
 
     // Render
     rasterizeRender(
-        0, m_glState, stream,
+        0, g_gl_state, stream,
         pos_ptr, pos_count, vtx_per_inst,
         tri_ptr, tri_count, ranges_ptr,
         width, height, depth,
@@ -71,7 +70,7 @@ void rasterize_fwd(
     );
 
     // Copy rasterized results into CUDA buffers.
-    rasterizeCopyResults(0, m_glState, stream, out_ptrs, width, height, depth);
+    rasterizeCopyResults(0, g_gl_state, stream, out_ptrs, width, height, depth);
 
     // Done. Release GL context.
     releaseGLContext();
