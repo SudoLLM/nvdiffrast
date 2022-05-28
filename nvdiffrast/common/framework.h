@@ -47,3 +47,11 @@ using namespace tensorflow::shape_inference;
 #endif
 
 //------------------------------------------------------------------------
+
+#ifdef NVDR_JAX
+#define NVDR_CTX_ARGS int _nvdr_ctx_dummy
+#define NVDR_CTX_PARAMS 0
+#define NVDR_CHECK(COND, ERR) do {} while(0);
+#define NVDR_CHECK_CUDA_ERROR(CUDA_CALL) do {} while(0);
+#define NVDR_CHECK_GL_ERROR(GL_CALL) do {} while(0);
+#endif

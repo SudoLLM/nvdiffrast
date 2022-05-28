@@ -1,9 +1,13 @@
 #pragma once
+#include <stdint.h>
+#include "../common/common.h"
+#include "../common/glutil.h"
+#include "../common/glutil_extlist.h"
 
-class GemotryDescriptor {
-    int32_t N;
-    int32_t V;
+struct GemotryDescriptor {
+    int32_t W, H;
+    int32_t N, V;
     int32_t F;
-    int32_t W;
-    int32_t H;
 };
+
+void rasterize_fwd(cudaStream_t stream, void **buffers, const char *opaque, size_t opaque_len);
