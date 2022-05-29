@@ -7,6 +7,8 @@
 #include "jax_rasterize.h"
 #include "pybind11_kernel_helpers.h"
 
+namespace py= pybind11;
+
 pybind11::dict Registrations() {
     pybind11::dict dict;
     dict["rasterize_fwd"] = EncapsulateFunction(rasterize_fwd);
@@ -15,7 +17,22 @@ pybind11::dict Registrations() {
 
 PYBIND11_MODULE(_impl_jax, m) {
     m.def("registrations", &Registrations);
-    m.def("build_descriptor", [](int32_t W, int32_t H, int32_t N, int32_t V, int32_t F) {
-        return PackDescriptor(GemotryDescriptor{W, H, N, V, F});
-    });
+    m.def("build_rasterize_descriptor",
+        [](int width, int height, bool enableDB,
+           bool instanceMode, int posCount, int triCount, int vtxPerInstance, int depth
+        ) {
+            return PackDescriptor(RasterizeDescriptor{
+                width, height, enableDB,
+                instanceMode, posCount, triCount, vtxPerInstance, depth
+            });
+        },
+        py::arg("width"),
+        py::arg("height"),
+        py::arg("enable_db"),
+        py::arg("instance_mode"),
+        py::arg("pos_count"),
+        py::arg("tri_count"),
+        py::arg("vtx_per_instance"),
+        py::arg("depth")
+    );
 }
