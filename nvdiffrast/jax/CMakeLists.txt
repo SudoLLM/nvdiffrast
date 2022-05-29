@@ -15,6 +15,7 @@ pybind11_add_module(
     ${PROJECT_SOURCE_DIR}/../common/rasterize.cpp
     ${PROJECT_SOURCE_DIR}/pybind11.cpp
     ${PROJECT_SOURCE_DIR}/jax_rasterize.cpp
+    ${PROJECT_SOURCE_DIR}/jax_interpolate.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 target_link_libraries(${PROJECT_NAME} PUBLIC GL EGL glog cuda)

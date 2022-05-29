@@ -49,8 +49,8 @@ def _rasterize_prim_abstract(pos, tri, w, h, enable_db):
     dtype = jax.dtypes.canonicalize_dtype(pos.dtype)
     shape = pos.shape
     return (
-        ShapedArray((shape[0], w, h, 4), dtype),
-        ShapedArray((shape[0], w, h, 4 if enable_db else 0), dtype)
+        ShapedArray((shape[0], h, w, 4), dtype),
+        ShapedArray((shape[0], h, w, 4 if enable_db else 0), dtype)
     )
 
 
@@ -69,8 +69,8 @@ def _rasterize_prim_translation_gpu(c: XlaBuilder, pos, tri, w, h, enable_db, *a
     N, V = dims_pos[:2]
     F = dims_tri[0]
     # get output shape
-    out_shape = xla_client.Shape.array_shape(dtype, [N, w, h, 4], [3, 2, 1, 0])
-    odb_shape = xla_client.Shape.array_shape(dtype, [N, w, h, 4 if enable_db else 0], [3, 2, 1, 0])
+    out_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4], [3, 2, 1, 0])
+    odb_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4 if enable_db else 0], [3, 2, 1, 0])
 
     # Encapsulate the information using the 'opaque' parameter
     opaque = _impl_jax.build_rasterize_descriptor(

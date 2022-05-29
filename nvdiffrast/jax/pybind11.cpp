@@ -5,10 +5,11 @@
 // custom call can be found in kernels.cc.cu.
 
 #include "jax_rasterize.h"
+#include "jax_interpolate.h"
 #include "pybind11_kernel_helpers.h"
 #include <glog/logging.h>
 
-namespace py= pybind11;
+namespace py = pybind11;
 
 pybind11::dict Registrations() {
     // TODO: better place to init logging
@@ -21,8 +22,7 @@ pybind11::dict Registrations() {
     return dict;
 }
 
-PYBIND11_MODULE(_impl_jax, m) {
-    m.def("registrations", &Registrations);
+void RegisterDescriptors(py::module_ & m) {
     m.def("build_rasterize_descriptor",
         [](int numVertices, int numTriangles, int width, int height, bool enableDB,
            bool instanceMode, int posCount, int triCount, int vtxPerInstance, int depth
@@ -43,4 +43,35 @@ PYBIND11_MODULE(_impl_jax, m) {
         py::arg("vtx_per_instance"),
         py::arg("depth")
     );
+
+    m.def("build_interpolate_descriptor", 
+        [](int  numVertices, int  numTriangles, int  numAttr,
+           int  attrBC, int  width, int  height, int  depth,
+           bool enableDB, bool instanceMode,
+           bool diffAttrsAll, std::vector<int> & diffAttrsVec
+        ) {
+            return PackDescriptor(InterpolateDescriptor{
+                numVertices, numTriangles, numAttr,
+                attrBC, width, height, depth,
+                enableDB, instanceMode,
+                diffAttrsAll, diffAttrsVec
+            });
+        },
+        py::arg("num_vertices"),
+        py::arg("num_triangles"),
+        py::arg("num_attrs"),
+        py::arg("attr_bc"),
+        py::arg("width"),
+        py::arg("height"),
+        py::arg("depth"),
+        py::arg("enable_db"),
+        py::arg("instance_mode"),
+        py::arg("diff_attrs_all"),
+        py::arg("diff_attrs_list")
+    );
+}
+
+PYBIND11_MODULE(_impl_jax, m) {
+    m.def("registrations", &Registrations);
+    RegisterDescriptors(m);
 }
