@@ -3,6 +3,8 @@
 #include <cuda_runtime.h>
 
 struct RasterizeDescriptor {
+    int  numVertices;
+    int  numTriangles;
     int  width;
     int  height;
     bool enableDB;
@@ -13,4 +15,5 @@ struct RasterizeDescriptor {
     int  depth;
 };
 
-void rasterize_fwd(cudaStream_t stream, void **buffers, const char *opaque, size_t opaque_len);
+void rasterizeFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t opaque_len);
+void rasterizeBwd(cudaStream_t stream, void **buffers, const char *opaque, size_t opaque_len);

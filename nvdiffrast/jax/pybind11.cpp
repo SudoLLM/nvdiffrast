@@ -6,26 +6,34 @@
 
 #include "jax_rasterize.h"
 #include "pybind11_kernel_helpers.h"
+#include <glog/logging.h>
 
 namespace py= pybind11;
 
 pybind11::dict Registrations() {
+    // TODO: better place to init logging
+    google::InitGoogleLogging("[nvdiffrast]");
+
     pybind11::dict dict;
-    dict["rasterize_fwd"] = EncapsulateFunction(rasterize_fwd);
+    dict["rasterize_fwd"] = EncapsulateFunction(rasterizeFwd);
+    dict["rasterize_bwd"] = EncapsulateFunction(rasterizeBwd);
+
     return dict;
 }
 
 PYBIND11_MODULE(_impl_jax, m) {
     m.def("registrations", &Registrations);
     m.def("build_rasterize_descriptor",
-        [](int width, int height, bool enableDB,
+        [](int numVertices, int numTriangles, int width, int height, bool enableDB,
            bool instanceMode, int posCount, int triCount, int vtxPerInstance, int depth
         ) {
             return PackDescriptor(RasterizeDescriptor{
-                width, height, enableDB,
+                numVertices, numTriangles, width, height, enableDB,
                 instanceMode, posCount, triCount, vtxPerInstance, depth
             });
         },
+        py::arg("num_vertices"),
+        py::arg("num_triangles"),
         py::arg("width"),
         py::arg("height"),
         py::arg("enable_db"),
