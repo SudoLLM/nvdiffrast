@@ -20,13 +20,14 @@ _MSG_SHAPE_TRI = "'tri' should be in shape [num_triangles, 3]"
 # **********************
 
 @partial(jax.custom_vjp, nondiff_argnums=(4,))
-def interpolate(attr, rast, tri, rast_db, diff_attrs=None):
-    diff_attrs = _parse_diff_attrs(diff_attrs, attr.shape[-1])
-    return _interpolate_prim.bind(attr, rast, tri, rast_db, diff_attrs=diff_attrs)
+def interpolate(attr, rast, tri, rast_db=None, diff_attrs=None):
+    _rast_db, diff_attrs = _parse_none_inputs(attr, rast, rast_db, diff_attrs)
+    return _interpolate_prim.bind(attr, rast, tri, _rast_db, diff_attrs=diff_attrs)
 
 
 def interpolate_fwd(attr, rast, tri, rast_db, diff_attrs):
-    pix_attr, pix_attr_db = interpolate(attr, rast, tri, rast_db, diff_attrs)
+    _rast_db, diff_attrs = _parse_none_inputs(attr, rast, rast_db, diff_attrs)
+    pix_attr, pix_attr_db = _interpolate_prim.bind(attr, rast, tri, _rast_db, diff_attrs=diff_attrs)
     return (pix_attr, pix_attr_db), (attr, rast, tri, rast_db)  # output, 'res' for bwd
 
 
@@ -34,9 +35,9 @@ def interpolate_fwd(attr, rast, tri, rast_db, diff_attrs):
 def interpolate_bwd(diff_attrs, fwd_res, d_out):
     attr, rast, tri, rast_db = fwd_res
     dy, dda = d_out
-    diff_attrs = _parse_diff_attrs(diff_attrs, attr.shape[-1])
-    grad = _interpolate_grad_prim.bind(attr, rast, tri, dy, rast_db, dda, diff_attrs=diff_attrs)
-    return (grad[0], grad[1], jnp.zeros_like(tri), grad[2])
+    _rast_db, diff_attrs = _parse_none_inputs(attr, rast, rast_db, diff_attrs)
+    grad = _interpolate_grad_prim.bind(attr, rast, tri, dy, _rast_db, dda, diff_attrs=diff_attrs)
+    return (grad[0], grad[1], None, (None if rast_db is None else grad[2]))
 
 
 interpolate.defvjp(interpolate_fwd, interpolate_bwd)
@@ -45,6 +46,16 @@ interpolate.defvjp(interpolate_fwd, interpolate_bwd)
 # *********************************
 # *  SUPPORT FOR JIT COMPILATION  *
 # *********************************
+
+def _parse_none_inputs(attr, rast, rast_db=None, diff_attrs=None):
+    if rast_db is None:
+        N, H, W, _ = rast.shape
+        rast_db = jnp.empty((N, H, W, 0), dtype=rast.dtype)
+        if diff_attrs is not None:
+            diff_attrs = None
+    diff_attrs = _parse_diff_attrs(diff_attrs, attr.shape[-1])
+    return rast_db, diff_attrs
+
 
 def _parse_diff_attrs(diff_attrs, A):
     if diff_attrs is None:
@@ -63,7 +74,7 @@ def _interpolate_prim_abstract(attr, rast, tri, rast_db, diff_attrs):
     assert rast.ndim == 4 and rast.shape[3] == 4, _MSG_SHAPE_RAST
     assert tri.ndim == 2, _MSG_SHAPE_TRI
     assert rast_db.ndim == 4 and rast_db.shape[3] in [0, 4], _MSG_SHAPE_RAST_DB
-    assert isinstance(diff_attrs, (tuple, list))
+    assert isinstance(diff_attrs, (tuple, list)), "invalid type: {}".format(type(diff_attrs))
     dtype = jax.dtypes.canonicalize_dtype(attr.dtype)
     N, H, W = rast.shape[:3]
     A = attr.shape[-1]

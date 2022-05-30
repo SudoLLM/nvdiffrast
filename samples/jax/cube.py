@@ -29,8 +29,8 @@ def transform_pos(mtx, pos):
 
 def render(mtx, pos, pos_idx, vtx_col, col_idx, resolution: int):
     pos_clip    = transform_pos(mtx, pos)
-    rast_out, rast_db = dr.rasterize(pos_clip, pos_idx, resolution=[resolution, resolution], enable_db=False)
-    color, _    = dr.interpolate(vtx_col[jnp.newaxis], rast_out, col_idx, rast_db)
+    rast_out, rast_db = dr.rasterize(pos_clip, pos_idx, resolution=[resolution, resolution], grad_db=False)
+    color, _    = dr.interpolate(vtx_col[jnp.newaxis], rast_out, col_idx)
     color       = dr.antialias(color, rast_out, pos_clip, pos_idx)
     return color
 

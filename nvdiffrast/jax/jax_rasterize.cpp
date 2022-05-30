@@ -43,9 +43,8 @@ void rasterizeFwd(cudaStream_t stream, void **buffers, const char *opaque, std::
     size_t iBuf = 0;
     const float   * posPtr = reinterpret_cast<const float   *>(buffers[iBuf++]);
     const int32_t * triPtr = reinterpret_cast<const int32_t *>(buffers[iBuf++]);
-    const int32_t * rangesPtr = (d.instanceMode)
-        ? nullptr
-        : reinterpret_cast<const int32_t *>(buffers[iBuf++]);
+    const int32_t * rangesPtr = reinterpret_cast<const int32_t *>(buffers[iBuf++]);
+    if (d.instanceMode) { rangesPtr = nullptr; }
     // - Outputs
     float * outPtrs[2];
     outPtrs[0] = reinterpret_cast<float *>(buffers[iBuf++]);

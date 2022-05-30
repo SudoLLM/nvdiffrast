@@ -52,7 +52,7 @@ def try_jax(verts, tris):
     tri = jnp.asarray(tris, dtype=jnp.int32)
 
     def loss_fn(pos, tri):
-        rast_out, out_db = ops.rasterize(pos, tri, (A, A), enable_db=enable_db)
+        rast_out, out_db = ops.rasterize(pos, tri, (A, A), grad_db=enable_db)
         return rast_out.mean(), (rast_out, out_db)
 
     (loss, (rast_out, out_db)), grad_pos = jax.value_and_grad(loss_fn, has_aux=True)(pos, tri)
