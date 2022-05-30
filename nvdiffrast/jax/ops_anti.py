@@ -15,23 +15,31 @@ from .build import _impl_jax  # TODO: setup.py changes dir
 # **********************
 
 @jax.custom_vjp
-def antialias(color, rast, pos, tri):
-    out, work_buffer = _antialias_prim.bind(color, rast, pos, tri)
+def antialias(color, rast, pos, tri, ev_hash=None):
+    if ev_hash is None:
+        ev_hash = _ev_hash_prim.bind(tri)
+    out, work_buffer = _antialias_prim.bind(color, rast, pos, tri, ev_hash)
     return out
 
 
-def antialias_fwd(color, rast, pos, tri):
-    out, work_buffer = _antialias_prim.bind(color, rast, pos, tri)
+def antialias_fwd(color, rast, pos, tri, ev_hash):
+    if ev_hash is None:
+        ev_hash = _ev_hash_prim.bind(tri)
+    out, work_buffer = _antialias_prim.bind(color, rast, pos, tri, ev_hash)
     return out, (color, rast, pos, tri, work_buffer)  # output, 'res' for bwd
 
 
 def antialias_bwd(fwd_res, dy):
     color, rast, pos, tri, work_buffer = fwd_res
     grad = _antialias_grad_prim.bind(color, rast, pos, tri, dy, work_buffer)
-    return (grad[0], None, grad[1], None)
+    return (grad[0], None, grad[1], None, None)
 
 
 antialias.defvjp(antialias_fwd, antialias_bwd)
+
+
+def get_ev_hash(tri):
+    return _ev_hash_prim.bind(tri)
 
 
 # *********************************
@@ -40,7 +48,7 @@ antialias.defvjp(antialias_fwd, antialias_bwd)
 
 # For JIT compilation we need a function to evaluate the shape and dtype of the
 # outputs of our op for some given inputs
-def _antialias_prim_abstract(color, rast, pos, tri):
+def _antialias_prim_abstract(color, rast, pos, tri, ev_hash):
     # TODO: check shapes
     dtype = jax.dtypes.canonicalize_dtype(color.dtype)
     N, H, W, _ = color.shape
@@ -53,7 +61,7 @@ def _antialias_prim_abstract(color, rast, pos, tri):
 # We also need a translation rule to convert the function into an XLA op. In
 # our case this is the custom XLA op that we've written. We're wrapping two
 # translation rules into one here: one for the CPU and one for the GPU
-def _antialias_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, *args):
+def _antialias_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, ev_hash, *args):
     dtype = c.get_shape(color).element_type()
     itype = c.get_shape(tri).element_type()
     dims_color = c.get_shape(color).dimensions()
@@ -73,9 +81,10 @@ def _antialias_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, *args)
         num_vertices=dims_pos[-2], num_triangles=dims_tri[-2],
         n=N, width=W, height=H, channels=C,
         instance_mode=instance_mode,
+        alloc_triangles=_get_n_alloc_triangles(dims_tri[0]),
     )
 
-    operands = (color, rast, pos, tri)
+    operands = (color, rast, pos, tri, ev_hash)
     return xla_client.ops.CustomCallWithLayout(
         c,
         b"antialias_fwd",
@@ -109,6 +118,7 @@ def _antialias_grad_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, d
         num_vertices=dims_pos[-2], num_triangles=dims_tri[-2],
         n=N, width=W, height=H, channels=C,
         instance_mode=instance_mode,
+        alloc_triangles=_get_n_alloc_triangles(dims_tri[0])
     )
 
     operands = (color, rast, pos, tri, dy, work_buffer)
@@ -120,6 +130,47 @@ def _antialias_grad_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, d
         shape_with_layout=xla_client.Shape.tuple_shape((c.get_shape(color), c.get_shape(pos))),
         opaque=opaque,
     )
+
+
+def _ev_hash_prim_abstract(tri):
+    n_alloc = _get_n_alloc_triangles(tri.shape[0])
+    n_elements = n_alloc * _impl_jax.get_aa_hash_elements_per_triangle() * 4
+    return ShapedArray((n_elements,), jax.dtypes.canonicalize_dtype(jnp.uint32))
+
+
+def _ev_hash_prim_translation_gpu(c: XlaBuilder, tri, *args):
+    shape_tri = c.get_shape(tri)
+    dims_tri = shape_tri.dimensions()
+    # get output shape
+    F = dims_tri[0]
+    n_alloc = _get_n_alloc_triangles(F)
+    n_elements = n_alloc * _impl_jax.get_aa_hash_elements_per_triangle() * 4
+    out_shape = xla_client.Shape.array_shape(jax.dtypes.canonicalize_dtype(jnp.uint32), [n_elements], [0])
+
+    # Encapsulate the information using the 'opaque' parameter
+    opaque = _impl_jax.build_antialias_descriptor(
+        num_vertices=0, num_triangles=n_alloc,
+        n=0, width=0, height=0, channels=0,
+        instance_mode=True,
+        alloc_triangles=_get_n_alloc_triangles(dims_tri[0]),
+    )
+
+    operands = (tri,)
+    return xla_client.ops.CustomCallWithLayout(
+        c,
+        b"antialias_get_ev_hash",
+        operands=operands,
+        operand_shapes_with_layout=tuple([c.get_shape(x) for x in operands]),
+        shape_with_layout=out_shape,
+        opaque=opaque,
+    )
+
+
+def _get_n_alloc_triangles(n_tris):
+    n_alloc = 64
+    while n_alloc < n_tris:
+        n_alloc *= 2
+    return n_alloc
 
 
 # *****************************
@@ -137,3 +188,9 @@ _antialias_grad_prim.multiple_results = True
 _antialias_grad_prim.def_impl(partial(xla.apply_primitive, _antialias_grad_prim))
 _antialias_grad_prim.def_abstract_eval(_antialias_grad_prim_abstract)
 xla.backend_specific_translations["gpu"][_antialias_grad_prim] = _antialias_grad_prim_translation_gpu  # for JIT compilation
+
+_ev_hash_prim = jax.core.Primitive("get_ev_hash")
+_ev_hash_prim.multiple_results = False
+_ev_hash_prim.def_impl(partial(xla.apply_primitive, _ev_hash_prim))
+_ev_hash_prim.def_abstract_eval(_ev_hash_prim_abstract)
+xla.backend_specific_translations["gpu"][_ev_hash_prim] = _ev_hash_prim_translation_gpu  # for JIT compilation

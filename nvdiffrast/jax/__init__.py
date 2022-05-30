@@ -5,6 +5,6 @@ for _name, _value in _impl_jax.registrations().items():
 
 from .ops_rast import rasterize
 from .ops_interp import interpolate
-from .ops_anti import antialias
+from .ops_anti import antialias, get_ev_hash
 
-__all__ = ["rasterize", "interpolate", "antialias"]
+__all__ = ["rasterize", "interpolate", "antialias", "get_ev_hash"]

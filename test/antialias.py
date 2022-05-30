@@ -79,11 +79,14 @@ def try_jax(verts, tris):
     tri = jnp.asarray(tris, dtype=jnp.int32)
     attr = jnp.asarray(depth, dtype=jnp.float32)
 
-    rast_out, rast_db = ops.rasterize(pos, tri, (A, A), enable_db=enable_db)
+    rast_out, rast_db = ops.rasterize(pos, tri, (A, A), grad_db=enable_db)
     pix_depth, pix_depth_db = ops.interpolate(attr, rast_out, tri, rast_db, diff_attrs=diff_attrs)
 
+    ev_hash = ops.get_ev_hash(tri)
+    print(ev_hash.shape)
+
     def loss_fn(pix_depth, pos):
-        pix_depth_aa = ops.antialias(pix_depth, rast_out, pos, tri)
+        pix_depth_aa = ops.antialias(pix_depth, rast_out, pos, tri, ev_hash=ev_hash)
         return pix_depth_aa.mean(), (pix_depth_aa, )
     
     (loss, (pix_depth_aa,)), (grad_col, grad_pos) = jax.value_and_grad(loss_fn, argnums=(0, 1), has_aux=True)(
@@ -112,7 +115,7 @@ def try_jax(verts, tris):
         np.save(f"{TDIR}/jax_depth_db.npy", pix_depth)
 
 
-try_torch(verts, tris)
+# try_torch(verts, tris)
 try_jax(verts, tris)
 
 cmp_names = ["rast", "depth", "depth_aa", "grad_col", "grad_pos"]

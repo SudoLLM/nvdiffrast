@@ -13,6 +13,55 @@ void AntialiasFwdDiscontinuityKernel(const AntialiasKernelParams p);
 void AntialiasFwdAnalysisKernel     (const AntialiasKernelParams p);
 void AntialiasGradKernel            (const AntialiasKernelParams p);
 
+int getAAHashElementsPerTriangle() {
+    return AA_HASH_ELEMENTS_PER_TRIANGLE;
+}
+
+void antialiasConstructTopologyHash(cudaStream_t stream, void **buffers, const char *opaque, size_t opaque_len) {
+    // Get descriptor
+    auto const & d = *UnpackDescriptor<AntialiasDescriptor>(opaque, opaque_len);
+
+    // All inputs and outputs are given in buffers
+    // - Inputs
+    size_t iBuf = 0;
+    const int32_t * triPtr   = reinterpret_cast<const int32_t *>(buffers[iBuf++]);
+    // - Outputs
+    uint32_t * outPtr = reinterpret_cast<uint32_t *>(buffers[iBuf++]);
+
+    AntialiasKernelParams p = {}; // Initialize all fields to zero.
+    memset(&p, 0, sizeof(p));  // TODO: necessary?
+
+    // Check in python code
+
+    // Fill in kernel parameters.
+    p.numTriangles = d.numTriangles;
+    p.numVertices = 0x7fffffff; // Let's not require vertex positions just to enable an error check.
+    p.tri = triPtr;
+
+    // Kernel parameters.
+    // p.allocTriangles = p.allocTriangles < 64 ? 64 : p.allocTriangles;
+    p.allocTriangles = d.allocTriangles;
+    while (p.allocTriangles < p.numTriangles) {
+        p.allocTriangles <<= 1; // Must be power of two.
+    }
+    // HACK: we calculate numTriangles in python code
+    CHECK_EQ(p.allocTriangles, d.numTriangles) << "Given numTriangles != allocTriangles";
+    LOG(INFO) << "Allocating topology hash size to accommodate " << p.allocTriangles << " triangles";
+
+    // Construct the hash tensor and get pointer.
+    // {p.allocTriangles * AA_HASH_ELEMENTS_PER_TRIANGLE * 4}
+    p.evHash = (uint4*)(outPtr);
+
+    // Check alignment.
+    NVDR_CHECK(!((uintptr_t)p.evHash & 15), "ev_hash internal tensor not aligned to int4");
+
+    // Clear the hash and populate the hash.
+    void* args[] = {&p};
+    NVDR_CHECK_CUDA_ERROR(cudaMemsetAsync(p.evHash, 0, p.allocTriangles * AA_HASH_ELEMENTS_PER_TRIANGLE * sizeof(uint4), stream));
+    NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)AntialiasFwdMeshKernel, (p.numTriangles - 1) / AA_MESH_KERNEL_THREADS_PER_BLOCK + 1, AA_MESH_KERNEL_THREADS_PER_BLOCK, args, 0, stream));
+}
+
+
 //------------------------------------------------------------------------
 // Forward
 
@@ -30,6 +79,7 @@ void antialiasFwd(cudaStream_t stream, void **buffers, const char *opaque, size_
     const float   * rastPtr  = reinterpret_cast<const float   *>(buffers[iBuf++]);
     const float   * posPtr   = reinterpret_cast<const float   *>(buffers[iBuf++]);
     const int32_t * triPtr   = reinterpret_cast<const int32_t *>(buffers[iBuf++]);
+    uint32_t * evHashPtr = reinterpret_cast<uint32_t *>(buffers[iBuf++]);
     // - Outputs
     float   * outPtr = reinterpret_cast<float *>(buffers[iBuf++]); // out
     int32_t * bufPtr = reinterpret_cast<int32_t *>(buffers[iBuf++]); // out_da
@@ -56,6 +106,8 @@ void antialiasFwd(cudaStream_t stream, void **buffers, const char *opaque, size_
     p.rasterOut = rastPtr;
     p.pos = posPtr;
     p.tri = triPtr;
+    p.evHash = (uint4*)evHashPtr;
+    p.allocTriangles = d.allocTriangles; // TODO: HACK
 
     // Output tensor.
     p.output = outPtr;
@@ -67,24 +119,24 @@ void antialiasFwd(cudaStream_t stream, void **buffers, const char *opaque, size_
     // Kernel parameters.
     void* args[] = {&p};
 
-    // TODO: cache evHash?
-    // Calculate opposite vertex hash.
-    {
-        if (p.allocTriangles < p.numTriangles) {
-            p.allocTriangles = std::max(p.allocTriangles, 64);
-            while (p.allocTriangles < p.numTriangles) {
-                p.allocTriangles <<= 1; // Must be power of two.
-            }
+    // // TODO: cache evHash?
+    // // Calculate opposite vertex hash.
+    // {
+    //     if (p.allocTriangles < p.numTriangles) {
+    //         p.allocTriangles = std::max(p.allocTriangles, 64);
+    //         while (p.allocTriangles < p.numTriangles) {
+    //             p.allocTriangles <<= 1; // Must be power of two.
+    //         }
 
-            // (Re-)allocate memory for the hash.
-            NVDR_CHECK_CUDA_ERROR(cudaMalloc(&p.evHash, p.allocTriangles * AA_HASH_ELEMENTS_PER_TRIANGLE * sizeof(uint4)));
-            LOG(INFO) << "Increasing topology hash size to accommodate " << p.allocTriangles << " triangles";
-        }
+    //         // (Re-)allocate memory for the hash.
+    //         NVDR_CHECK_CUDA_ERROR(cudaMalloc(&p.evHash, p.allocTriangles * AA_HASH_ELEMENTS_PER_TRIANGLE * sizeof(uint4)));
+    //         LOG(INFO) << "Increasing topology hash size to accommodate " << p.allocTriangles << " triangles";
+    //     }
 
-        // Clear the hash and launch the mesh kernel to populate it.
-        NVDR_CHECK_CUDA_ERROR(cudaMemsetAsync(p.evHash, 0, p.allocTriangles * AA_HASH_ELEMENTS_PER_TRIANGLE * sizeof(uint4), stream));
-        NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)AntialiasFwdMeshKernel, (p.numTriangles - 1) / AA_MESH_KERNEL_THREADS_PER_BLOCK + 1, AA_MESH_KERNEL_THREADS_PER_BLOCK, args, 0, stream));
-    }
+    //     // Clear the hash and launch the mesh kernel to populate it.
+    //     NVDR_CHECK_CUDA_ERROR(cudaMemsetAsync(p.evHash, 0, p.allocTriangles * AA_HASH_ELEMENTS_PER_TRIANGLE * sizeof(uint4), stream));
+    //     NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)AntialiasFwdMeshKernel, (p.numTriangles - 1) / AA_MESH_KERNEL_THREADS_PER_BLOCK + 1, AA_MESH_KERNEL_THREADS_PER_BLOCK, args, 0, stream));
+    // }
 
     // Verify that buffers are aligned to allow float2/float4 operations.
     NVDR_CHECK(!((uintptr_t)p.pos        & 15), "pos input tensor not aligned to float4");
@@ -110,9 +162,9 @@ void antialiasFwd(cudaStream_t stream, void **buffers, const char *opaque, size_
     // Launch analysis kernel.
     NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel((void*)AntialiasFwdAnalysisKernel, numCTA * numSM, AA_ANALYSIS_KERNEL_THREADS_PER_BLOCK, args, 0, stream));
 
-    // TODO: cache?
-    // Release evHash
-    NVDR_CHECK_CUDA_ERROR(cudaFree(p.evHash));
+    // // TODO: cache?
+    // // Release evHash
+    // NVDR_CHECK_CUDA_ERROR(cudaFree(p.evHash));
 }
 
 //------------------------------------------------------------------------

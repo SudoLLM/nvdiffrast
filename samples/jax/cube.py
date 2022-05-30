@@ -7,6 +7,7 @@
 # license agreement from NVIDIA CORPORATION is strictly prohibited.
 from functools import partial
 
+import time
 import argparse
 import os
 import pathlib
@@ -27,11 +28,11 @@ def transform_pos(mtx, pos):
     posw = jnp.pad(pos, ((0, 0), (0, 1)), "constant", constant_values=1)
     return (posw @ mtx.T)[jnp.newaxis]
 
-def render(mtx, pos, pos_idx, vtx_col, col_idx, resolution: int):
+def render(mtx, pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, resolution: int):
     pos_clip    = transform_pos(mtx, pos)
     rast_out, rast_db = dr.rasterize(pos_clip, pos_idx, resolution=[resolution, resolution], grad_db=False)
     color, _    = dr.interpolate(vtx_col[jnp.newaxis], rast_out, col_idx)
-    color       = dr.antialias(color, rast_out, pos_clip, pos_idx)
+    color       = dr.antialias(color, rast_out, pos_clip, pos_idx, pos_idx_ev_hash)
     return color
 
 def make_grid(arr, ncols=2):
@@ -75,6 +76,8 @@ def fit_cube(max_iter          = 5000,
     vtx_pos = jnp.asarray(vtxp.astype(np.float32), dtype=jnp.float32)
     vtx_col = jnp.asarray(vtxc.astype(np.float32), dtype=jnp.float32)
 
+    pos_idx_ev_hash = dr.get_ev_hash(pos_idx)
+
     # Repeats.
     for rep in range(repeats):
 
@@ -99,16 +102,16 @@ def fit_cube(max_iter          = 5000,
         # init state
         opt_state = optimizer.init(params)
 
-        def loss_fn(params, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, resolution):
-            color     = render(r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, resolution)
-            color_opt = render(r_mvp, params["vtx_pos"], pos_idx, params["vtx_col"], col_idx, resolution)
+        def loss_fn(params, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, resolution):
+            color     = render(r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, resolution)
+            color_opt = render(r_mvp, params["vtx_pos"], pos_idx, params["vtx_col"], col_idx, pos_idx_ev_hash, resolution)
             loss = jnp.mean((color - color_opt)**2)  # L2 pixel loss.
             return loss, (color, color_opt)
 
-        @partial(jax.jit, static_argnums=(7,))
-        def step(params, opt_state, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, resolution: int):
+        @partial(jax.jit, static_argnums=(8,))
+        def step(params, opt_state, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, resolution: int):
             (loss_value, (color, color_opt)), grads = jax.value_and_grad(loss_fn, has_aux=True)(
-                params, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, resolution
+                params, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, resolution
             )
             updates, opt_state = optimizer.update(grads, opt_state, params)
             params = optax.apply_updates(params, updates)
@@ -145,7 +148,9 @@ def fit_cube(max_iter          = 5000,
             # Compute loss and train.
             r_mvp = jnp.asarray(r_mvp, dtype=jnp.float32)
             a_mvp = jnp.asarray(a_mvp, dtype=jnp.float32)
-            params, opt_state, color, color_opt = step(params, opt_state, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, resolution)
+            params, opt_state, color, color_opt = step(
+                params, opt_state, r_mvp, vtx_pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, resolution
+            )
 
             # Show/save image.
             display_image = display_interval and (it % display_interval == 0)
@@ -156,8 +161,8 @@ def fit_cube(max_iter          = 5000,
 
                 img_b = jax.device_get(color)[0][::-1]
                 img_o = jax.device_get(color_opt)[0][::-1]
-                img_d = jax.device_get(render(a_mvp, params["vtx_pos"], pos_idx, params["vtx_col"], col_idx, display_res))[0]
-                img_r = jax.device_get(render(a_mvp, vtx_pos, pos_idx, vtx_col, col_idx, display_res))[0]
+                img_d = jax.device_get(render(a_mvp, params["vtx_pos"], pos_idx, params["vtx_col"], col_idx, pos_idx_ev_hash, display_res))[0]
+                img_r = jax.device_get(render(a_mvp, vtx_pos, pos_idx, vtx_col, col_idx, pos_idx_ev_hash, display_res))[0]
 
                 scl = display_res // img_o.shape[0]
                 img_b = np.repeat(np.repeat(img_b, scl, axis=0), scl, axis=1)

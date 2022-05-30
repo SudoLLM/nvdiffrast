@@ -23,6 +23,7 @@ pybind11::dict Registrations() {
     dict["interpolate_bwd"] = EncapsulateFunction(interpolateBwd);
     dict["antialias_fwd"] = EncapsulateFunction(antialiasFwd);
     dict["antialias_bwd"] = EncapsulateFunction(antialiasBwd);
+    dict["antialias_get_ev_hash"] = EncapsulateFunction(antialiasConstructTopologyHash);
     return dict;
 }
 
@@ -78,12 +79,12 @@ void RegisterDescriptors(py::module_ & m) {
     m.def("build_antialias_descriptor",
         [](int numVertices, int numTriangles,
            int n, int width, int height, int channels,
-           bool instanceMode
+           bool instanceMode, int allocTriangles
         ) {
             return PackDescriptor(AntialiasDescriptor{
                 numVertices, numTriangles,
                 n, width, height, channels,
-                instanceMode
+                instanceMode, allocTriangles
             });
         },
         py::arg("num_vertices"),
@@ -92,11 +93,14 @@ void RegisterDescriptors(py::module_ & m) {
         py::arg("width"),
         py::arg("height"),
         py::arg("channels"),
-        py::arg("instance_mode")
+        py::arg("instance_mode"),
+        py::arg("alloc_triangles")
     );
 }
 
 PYBIND11_MODULE(_impl_jax, m) {
     m.def("registrations", &Registrations);
+    m.def("get_aa_hash_elements_per_triangle", &getAAHashElementsPerTriangle);
+
     RegisterDescriptors(m);
 }
