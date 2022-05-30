@@ -8,6 +8,7 @@ struct InterpolateDescriptor {
     int  numTriangles;
     int  numAttr;
     int  attrBC;
+    int  attrDepth;
     int  width;
     int  height;
     int  depth;

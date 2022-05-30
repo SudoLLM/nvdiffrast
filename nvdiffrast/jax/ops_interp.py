@@ -92,9 +92,13 @@ def _interpolate_prim_translation_gpu(c: XlaBuilder, attr, rast, tri, rast_db, d
     odb_shape = xla_client.Shape.array_shape(dtype, [N, H, W, D*2], [3, 2, 1, 0])
 
     # Encapsulate the information using the 'opaque' parameter
+    attr_depth = 1
+    if instance_mode:
+        attr_depth = dims_attr[0] if len(dims_attr) > 1 else 0
     opaque = _impl_jax.build_interpolate_descriptor(
         num_vertices=dims_attr[-2], num_triangles=dims_tri[-2], num_attrs=A,
         attr_bc=1 if (instance_mode and dims_attr[0] == 1) else 0,
+        attr_depth=attr_depth,
         width=W, height=H, depth=N, enable_db=enable_db, instance_mode=instance_mode,
         diff_attrs_all=(D == A), diff_attrs_list=diff_attrs,
     )
@@ -141,7 +145,8 @@ def _interpolate_grad_prim_translation_gpu(c: XlaBuilder, attr, rast, tri, dy, r
     attr_bc = 1 if instance_mode and attr_depth < N else 0
     opaque = _impl_jax.build_interpolate_descriptor(
         num_vertices=dims_attr[-2], num_triangles=dims_tri[-2], num_attrs=A,
-        attr_bc=attr_bc, width=W, height=H, depth=N,
+        attr_bc=attr_bc, attr_depth=attr_depth,
+        width=W, height=H, depth=N,
         enable_db=enable_db, instance_mode=instance_mode,
         diff_attrs_all=(D == A), diff_attrs_list=diff_attrs,
     )

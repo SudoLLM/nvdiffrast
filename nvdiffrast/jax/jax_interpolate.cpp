@@ -53,6 +53,8 @@ void interpolateFwd(cudaStream_t stream, void **buffers, const char *opaque, siz
     // TODO: check types and shapes in python code
 
     InterpolateKernelParams p = {}; // Initialize all fields to zero.
+    memset(&p, 0, sizeof(p));  // TODO: necessary?
+
     p.instance_mode = d.instanceMode;
 
     // Extract input dimensions.
@@ -118,7 +120,10 @@ void interpolateBwd(cudaStream_t stream, void **buffers, const char *opaque, siz
     // TODO: check types and shapes in python code
 
     InterpolateKernelParams p = {}; // Initialize all fields to zero.
+    memset(&p, 0, sizeof(p));  // TODO: necessary?
+
     p.instance_mode = d.instanceMode;
+    p.attrBC        = d.attrBC;
 
     // Extract input dimensions.
     p.numVertices  = d.numVertices;
@@ -127,9 +132,6 @@ void interpolateBwd(cudaStream_t stream, void **buffers, const char *opaque, siz
     p.height       = d.height;
     p.width        = d.width;
     p.depth        = d.depth;
-    p.attrBC       = d.attrBC;
-    // int attrDepth = d.instanceMode ? (attr.sizes().size() > 1 ? attr.size(0) : 0) : 1;
-    // p.attrBC = (p.instance_mode && attr_depth < p.depth) ? 1 : 0;
 
     // Set attribute pixel differential info if enabled, otherwise leave as zero.
     if (enableDA) { set_diff_attrs(p, d.diffAttrsAll, d.diffAttrsVec); }
@@ -148,12 +150,17 @@ void interpolateBwd(cudaStream_t stream, void **buffers, const char *opaque, siz
     p.gradRaster = gradRastPtr;
     p.gradRasterDB = gradRastDBPtr;
 
+    // Clear attribute gradients.
+    cudaMemsetAsync(p.gradAttr, 0, d.attrDepth * p.numVertices * p.numAttr * sizeof(float), stream);
+
     // Verify that buffers are aligned to allow float2/float4 operations.
     NVDR_CHECK(!((uintptr_t)p.rast         & 15), "rast input tensor not aligned to float4");
-    NVDR_CHECK(!((uintptr_t)p.rastDB       & 15), "rast_db input tensor not aligned to float4");
-    NVDR_CHECK(!((uintptr_t)p.dda          &  7), "dda input tensor not aligned to float2");
     NVDR_CHECK(!((uintptr_t)p.gradRaster   & 15), "grad_rast output tensor not aligned to float4");
-    NVDR_CHECK(!((uintptr_t)p.gradRasterDB & 15), "grad_rast_db output tensor not aligned to float4");
+    if (enableDA) {
+        NVDR_CHECK(!((uintptr_t)p.dda          &  7), "dda input tensor not aligned to float2");
+        NVDR_CHECK(!((uintptr_t)p.rastDB       & 15), "rast_db input tensor not aligned to float4");
+        NVDR_CHECK(!((uintptr_t)p.gradRasterDB & 15), "grad_rast_db output tensor not aligned to float4");
+    }
 
     // Choose launch parameters.
     dim3 blockSize = getLaunchBlockSize(IP_GRAD_MAX_KERNEL_BLOCK_WIDTH, IP_GRAD_MAX_KERNEL_BLOCK_HEIGHT, p.width, p.height);

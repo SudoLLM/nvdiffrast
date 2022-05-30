@@ -87,8 +87,10 @@ void rasterizeBwd(cudaStream_t stream, void **buffers, const char *opaque, std::
     // Outputs
     float * gradPtr = reinterpret_cast<float *>(buffers[iBuf++]);
 
-    RasterizeGradParams p;
     // TODO: check device
+
+    RasterizeGradParams p = {};
+    memset(&p, 0, sizeof(p));  // TODO: necessary?
 
     // Determine instance mode.
     p.instance_mode = (d.instanceMode) ? 1 : 0;
@@ -117,6 +119,10 @@ void rasterizeBwd(cudaStream_t stream, void **buffers, const char *opaque, std::
 
     // Output data pointers
     p.grad = gradPtr;
+
+    // Clear the output buffers.
+    size_t gradBytes = (p.instance_mode ? p.depth : 1) * p.numVertices * 4 * sizeof(float);
+    cudaMemsetAsync(p.grad, 0, gradBytes, stream);
 
     // Verify that buffers are aligned to allow float2/float4 operations.
     NVDR_CHECK(!((uintptr_t)p.pos & 15), "pos input tensor not aligned to float4");

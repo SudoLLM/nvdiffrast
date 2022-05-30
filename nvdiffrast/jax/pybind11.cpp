@@ -50,13 +50,13 @@ void RegisterDescriptors(py::module_ & m) {
 
     m.def("build_interpolate_descriptor", 
         [](int  numVertices, int  numTriangles, int  numAttr,
-           int  attrBC, int  width, int  height, int  depth,
+           int  attrBC, int attrDepth, int  width, int  height, int  depth,
            bool enableDB, bool instanceMode,
            bool diffAttrsAll, std::vector<int> & diffAttrsVec
         ) {
             return PackDescriptor(InterpolateDescriptor{
                 numVertices, numTriangles, numAttr,
-                attrBC, width, height, depth,
+                attrBC, attrDepth, width, height, depth,
                 enableDB, instanceMode,
                 diffAttrsAll, diffAttrsVec
             });
@@ -65,6 +65,7 @@ void RegisterDescriptors(py::module_ & m) {
         py::arg("num_triangles"),
         py::arg("num_attrs"),
         py::arg("attr_bc"),
+        py::arg("attr_depth"),
         py::arg("width"),
         py::arg("height"),
         py::arg("depth"),

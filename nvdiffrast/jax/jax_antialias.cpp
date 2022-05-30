@@ -21,6 +21,7 @@ void antialiasFwd(cudaStream_t stream, void **buffers, const char *opaque, size_
     auto const & d = *UnpackDescriptor<AntialiasDescriptor>(opaque, opaque_len);
 
     AntialiasKernelParams p = {}; // Initialize all fields to zero.
+    memset(&p, 0, sizeof(p));  // TODO: necessary?
 
     // All inputs and outputs are given in buffers
     // - Inputs
@@ -122,6 +123,7 @@ void antialiasBwd(cudaStream_t stream, void **buffers, const char *opaque, size_
     auto const & d = *UnpackDescriptor<AntialiasDescriptor>(opaque, opaque_len);
 
     AntialiasKernelParams p = {}; // Initialize all fields to zero.
+    memset(&p, 0, sizeof(p));  // TODO: necessary?
 
     // All inputs and outputs are given in buffers
     // - Inputs
