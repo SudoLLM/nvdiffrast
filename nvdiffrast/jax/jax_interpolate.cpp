@@ -1,6 +1,8 @@
+#include <cuda.h>
 #include "jax_interpolate.h"
 #include "kernel_helpers.h"
 #include "../common/common.h"
+#include "../common/framework.h"
 #include "../common/interpolate.h"
 
 //------------------------------------------------------------------------
@@ -14,7 +16,7 @@ void InterpolateGradKernelDa(const InterpolateKernelParams p);
 //------------------------------------------------------------------------
 // Helper
 
-static void set_diff_attrs(InterpolateKernelParams& p, bool diff_attrs_all, std::vector<int>& diff_attrs_vec) {
+static void set_diff_attrs(InterpolateKernelParams& p, bool diff_attrs_all, std::vector<int> const & diff_attrs_vec) {
     if (diff_attrs_all) {
         p.numDiffAttr = p.numAttr;
         p.diff_attrs_all = 1;
@@ -159,6 +161,6 @@ void interpolateBwd(cudaStream_t stream, void **buffers, const char *opaque, siz
 
     // Launch CUDA kernel.
     void* args[] = {&p};
-    void* func = enable_da ? (void*)InterpolateGradKernelDa : (void*)InterpolateGradKernel;
+    void* func = enableDA ? (void*)InterpolateGradKernelDa : (void*)InterpolateGradKernel;
     NVDR_CHECK_CUDA_ERROR(cudaLaunchKernel(func, gridSize, blockSize, args, 0, stream));
 }

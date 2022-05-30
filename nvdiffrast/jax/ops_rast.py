@@ -10,28 +10,27 @@ from jaxlib.xla_extension import XlaBuilder
 
 from .build import _impl_jax  # TODO: setup.py changes dir
 
-for _name, _value in _impl_jax.registrations().items():
-    xla_client.register_custom_call_target(_name, _value, platform="gpu")
-
 
 # **********************
 # *  USER'S INTERFACE  *
 # **********************
 
-@partial(jax.custom_vjp, nondiff_argnums=(1, 2, 3, 4))
-def rasterize(pos: jnp.ndarray, tri: jnp.ndarray, w: int, h: int, enable_db: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+@partial(jax.custom_vjp, nondiff_argnums=(1, 2, 3))
+def rasterize(pos: jnp.ndarray, tri: jnp.ndarray, resolution: Tuple[int, int], enable_db: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    w, h = resolution
     return _rasterize_prim.bind(pos, tri, w=w, h=h, enable_db=enable_db)
 
 
-def rasterize_fwd(pos, tri, w, h, enable_db):
-    rast_out, db_out = rasterize(pos, tri, w, h, enable_db)
+def rasterize_fwd(pos, tri, resolution, enable_db):
+    rast_out, db_out = rasterize(pos, tri, resolution, enable_db)
     return (rast_out, db_out), (pos, rast_out)  # output, 'res' for bwd
 
 
-# nondiff_argnums 1, 2, 3, 4 start the arguments list
-def rasterize_bwd(tri, w, h, enable_db, fwd_res, d_out):
+# nondiff_argnums 1, 2, 3 start the arguments list
+def rasterize_bwd(tri, resolution, enable_db, fwd_res, d_out):
     pos, out = fwd_res
     dy, ddb = d_out
+    w, h = resolution
     grad = _rasterize_grad_prim.bind(pos, tri, out, dy, ddb, w=w, h=h, enable_db=enable_db)
     return tuple(grad)
 

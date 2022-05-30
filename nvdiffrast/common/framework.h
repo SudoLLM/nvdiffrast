@@ -49,6 +49,7 @@ using namespace tensorflow::shape_inference;
 //------------------------------------------------------------------------
 
 #ifdef NVDR_JAX
+#include <glog/logging.h>
 #define NVDR_CTX_ARGS int _nvdr_ctx_dummy
 #define NVDR_CTX_PARAMS 0
 #define NVDR_CHECK(COND, ERR) do { CHECK(COND) << ERR; } while(0);

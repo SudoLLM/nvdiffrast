@@ -1,5 +1,8 @@
-cmake_minimum_required(VERSION 3.12...3.18)
+cmake_minimum_required(VERSION 3.12)
 project(_impl_jax LANGUAGES CXX)
+
+# sudo apt update
+# sudo apt install libegl1-mesa-dev libgoogle-glog-dev -y
 
 enable_language(CUDA)
 
@@ -13,13 +16,14 @@ pybind11_add_module(
     ${PROJECT_SOURCE_DIR}/../common/glutil.cpp
     ${PROJECT_SOURCE_DIR}/../common/rasterize.cu
     ${PROJECT_SOURCE_DIR}/../common/rasterize.cpp
+    ${PROJECT_SOURCE_DIR}/../common/interpolate.cu
+    ${PROJECT_SOURCE_DIR}/../common/antialias.cu
     ${PROJECT_SOURCE_DIR}/pybind11.cpp
     ${PROJECT_SOURCE_DIR}/jax_rasterize.cpp
     ${PROJECT_SOURCE_DIR}/jax_interpolate.cpp
+    ${PROJECT_SOURCE_DIR}/jax_antialias.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 target_link_libraries(${PROJECT_NAME} PUBLIC GL EGL glog cuda)
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_11)
 target_compile_definitions(${PROJECT_NAME} PRIVATE "-DNVDR_JAX")
-
-# install(TARGETS ${PROJECT_NAME} DESTINATION kepler_jax)

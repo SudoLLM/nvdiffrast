@@ -6,6 +6,7 @@
 
 #include "jax_rasterize.h"
 #include "jax_interpolate.h"
+#include "jax_antialias.h"
 #include "pybind11_kernel_helpers.h"
 #include <glog/logging.h>
 
@@ -13,12 +14,15 @@ namespace py = pybind11;
 
 pybind11::dict Registrations() {
     // TODO: better place to init logging
-    google::InitGoogleLogging("[nvdiffrast]");
+    // google::InitGoogleLogging("[nvdiffrast]");
 
     pybind11::dict dict;
     dict["rasterize_fwd"] = EncapsulateFunction(rasterizeFwd);
     dict["rasterize_bwd"] = EncapsulateFunction(rasterizeBwd);
-
+    dict["interpolate_fwd"] = EncapsulateFunction(interpolateFwd);
+    dict["interpolate_bwd"] = EncapsulateFunction(interpolateBwd);
+    dict["antialias_fwd"] = EncapsulateFunction(antialiasFwd);
+    dict["antialias_bwd"] = EncapsulateFunction(antialiasBwd);
     return dict;
 }
 
@@ -68,6 +72,26 @@ void RegisterDescriptors(py::module_ & m) {
         py::arg("instance_mode"),
         py::arg("diff_attrs_all"),
         py::arg("diff_attrs_list")
+    );
+
+    m.def("build_antialias_descriptor",
+        [](int numVertices, int numTriangles,
+           int n, int width, int height, int channels,
+           bool instanceMode
+        ) {
+            return PackDescriptor(AntialiasDescriptor{
+                numVertices, numTriangles,
+                n, width, height, channels,
+                instanceMode
+            });
+        },
+        py::arg("num_vertices"),
+        py::arg("num_triangles"),
+        py::arg("n"),
+        py::arg("width"),
+        py::arg("height"),
+        py::arg("channels"),
+        py::arg("instance_mode")
     );
 }
 

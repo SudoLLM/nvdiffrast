@@ -5,6 +5,7 @@
 // strictly necessary, but they do it in jaxlib, so let's do it here too.
 #pragma once
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include "kernel_helpers.h"
 
 template <typename T>
