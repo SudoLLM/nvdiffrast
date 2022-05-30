@@ -6,3 +6,4 @@ data
 test/data
 test/test*
 tmp_build.sh
+tmp*

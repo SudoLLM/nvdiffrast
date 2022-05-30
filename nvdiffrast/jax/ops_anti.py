@@ -14,7 +14,7 @@ from .build import _impl_jax  # TODO: setup.py changes dir
 # *  USER'S INTERFACE  *
 # **********************
 
-@partial(jax.custom_vjp, nondiff_argnums=(1, 3))
+@jax.custom_vjp
 def antialias(color, rast, pos, tri):
     out, work_buffer = _antialias_prim.bind(color, rast, pos, tri)
     return out
@@ -22,14 +22,13 @@ def antialias(color, rast, pos, tri):
 
 def antialias_fwd(color, rast, pos, tri):
     out, work_buffer = _antialias_prim.bind(color, rast, pos, tri)
-    return out, (color, pos, work_buffer)  # output, 'res' for bwd
+    return out, (color, rast, pos, tri, work_buffer)  # output, 'res' for bwd
 
 
-# nondiff_argnums 1, 3, start the arguments list
-def antialias_bwd(rast, tri, fwd_res, dy):
-    color, pos, work_buffer = fwd_res
+def antialias_bwd(fwd_res, dy):
+    color, rast, pos, tri, work_buffer = fwd_res
     grad = _antialias_grad_prim.bind(color, rast, pos, tri, dy, work_buffer)
-    return tuple(grad)
+    return (grad[0], jnp.zeros_like(rast), grad[1], jnp.zeros_like(tri))
 
 
 antialias.defvjp(antialias_fwd, antialias_bwd)

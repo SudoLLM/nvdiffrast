@@ -19,7 +19,7 @@ _MSG_SHAPE_TRI = "'tri' should be in shape [num_triangles, 3]"
 # *  USER'S INTERFACE  *
 # **********************
 
-@partial(jax.custom_vjp, nondiff_argnums=(2, 4))
+@partial(jax.custom_vjp, nondiff_argnums=(4,))
 def interpolate(attr, rast, tri, rast_db, diff_attrs=None):
     diff_attrs = _parse_diff_attrs(diff_attrs, attr.shape[-1])
     return _interpolate_prim.bind(attr, rast, tri, rast_db, diff_attrs=diff_attrs)
@@ -27,16 +27,16 @@ def interpolate(attr, rast, tri, rast_db, diff_attrs=None):
 
 def interpolate_fwd(attr, rast, tri, rast_db, diff_attrs):
     pix_attr, pix_attr_db = interpolate(attr, rast, tri, rast_db, diff_attrs)
-    return (pix_attr, pix_attr_db), (attr, rast, rast_db)  # output, 'res' for bwd
+    return (pix_attr, pix_attr_db), (attr, rast, tri, rast_db)  # output, 'res' for bwd
 
 
-# nondiff_argnums 2, 4 start the arguments list
-def interpolate_bwd(tri, diff_attrs, fwd_res, d_out):
-    attr, rast, rast_db = fwd_res
+# nondiff_argnums 4 start the arguments list
+def interpolate_bwd(diff_attrs, fwd_res, d_out):
+    attr, rast, tri, rast_db = fwd_res
     dy, dda = d_out
     diff_attrs = _parse_diff_attrs(diff_attrs, attr.shape[-1])
     grad = _interpolate_grad_prim.bind(attr, rast, tri, dy, rast_db, dda, diff_attrs=diff_attrs)
-    return tuple(grad)
+    return (grad[0], grad[1], jnp.zeros_like(tri), grad[2])
 
 
 interpolate.defvjp(interpolate_fwd, interpolate_bwd)

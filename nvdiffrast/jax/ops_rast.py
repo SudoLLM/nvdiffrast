@@ -15,7 +15,7 @@ from .build import _impl_jax  # TODO: setup.py changes dir
 # *  USER'S INTERFACE  *
 # **********************
 
-@partial(jax.custom_vjp, nondiff_argnums=(1, 2, 3))
+@partial(jax.custom_vjp, nondiff_argnums=(2, 3))
 def rasterize(pos: jnp.ndarray, tri: jnp.ndarray, resolution: Tuple[int, int], enable_db: bool) -> Tuple[jnp.ndarray, jnp.ndarray]:
     w, h = resolution
     return _rasterize_prim.bind(pos, tri, w=w, h=h, enable_db=enable_db)
@@ -23,16 +23,16 @@ def rasterize(pos: jnp.ndarray, tri: jnp.ndarray, resolution: Tuple[int, int], e
 
 def rasterize_fwd(pos, tri, resolution, enable_db):
     rast_out, db_out = rasterize(pos, tri, resolution, enable_db)
-    return (rast_out, db_out), (pos, rast_out)  # output, 'res' for bwd
+    return (rast_out, db_out), (pos, tri, rast_out)  # output, 'res' for bwd
 
 
-# nondiff_argnums 1, 2, 3 start the arguments list
-def rasterize_bwd(tri, resolution, enable_db, fwd_res, d_out):
-    pos, out = fwd_res
+# nondiff_argnums 2, 3 start the arguments list
+def rasterize_bwd(resolution, enable_db, fwd_res, d_out):
+    pos, tri, out = fwd_res
     dy, ddb = d_out
     w, h = resolution
     grad = _rasterize_grad_prim.bind(pos, tri, out, dy, ddb, w=w, h=h, enable_db=enable_db)
-    return tuple(grad)
+    return (grad[0], jnp.zeros_like(tri))
 
 
 rasterize.defvjp(rasterize_fwd, rasterize_bwd)
