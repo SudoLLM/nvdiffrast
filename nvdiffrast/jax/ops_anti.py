@@ -9,6 +9,7 @@ from jax.abstract_arrays import ShapedArray
 from jaxlib.xla_extension import XlaBuilder
 
 from .build import _impl_jax  # TODO: setup.py changes dir
+from .utils import check_array
 
 # **********************
 # *  USER'S INTERFACE  *
@@ -49,7 +50,12 @@ def get_ev_hash(tri):
 # For JIT compilation we need a function to evaluate the shape and dtype of the
 # outputs of our op for some given inputs
 def _antialias_prim_abstract(color, rast, pos, tri, ev_hash):
-    # TODO: check shapes
+    # check
+    check_array("color", color, shapes=[(None, None, None, None)], dtype=jnp.float32)
+    check_array("rast", rast, shapes=[(None, None, None, 4)], dtype=jnp.float32)
+    check_array("pos", pos, shapes=[(None, None, 4), (None, 4)], dtype=jnp.float32)
+    check_array("tri", tri, shapes=[(None, 3)], dtype=jnp.int32)
+    # return abstract array
     dtype = jax.dtypes.canonicalize_dtype(color.dtype)
     N, H, W, _ = color.shape
     return (
@@ -65,9 +71,8 @@ def _antialias_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, ev_has
     dtype = c.get_shape(color).element_type()
     itype = c.get_shape(tri).element_type()
     dims_color = c.get_shape(color).dimensions()
-    dims_rast = c.get_shape(rast).dimensions()
     dims_pos = c.get_shape(pos).dimensions()
-    dims_tri  = c.get_shape(tri).dimensions()
+    dims_tri = c.get_shape(tri).dimensions()
 
     # get mode booleans
     instance_mode = len(dims_pos) > 2
@@ -96,7 +101,9 @@ def _antialias_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, ev_has
 
 
 def _antialias_grad_prim_abstract(color, rast, pos, tri, dy, work_buffer):
-    # TODO: check shapes
+    # check
+    check_array("dy", dy, shapes=[color.shape], dtype=color.dtype)
+    # return
     return (
         ShapedArray(color.shape, jax.dtypes.canonicalize_dtype(color.dtype)),
         ShapedArray(pos.shape,   jax.dtypes.canonicalize_dtype(pos.dtype))
@@ -106,7 +113,7 @@ def _antialias_grad_prim_abstract(color, rast, pos, tri, dy, work_buffer):
 def _antialias_grad_prim_translation_gpu(c: XlaBuilder, color, rast, pos, tri, dy, work_buffer, *args):
     dims_color = c.get_shape(color).dimensions()
     dims_pos = c.get_shape(pos).dimensions()
-    dims_tri  = c.get_shape(tri).dimensions()
+    dims_tri = c.get_shape(tri).dimensions()
 
     # get mode booleans
     instance_mode = len(dims_pos) > 2

@@ -9,6 +9,7 @@ from jax.abstract_arrays import ShapedArray
 from jaxlib.xla_extension import XlaBuilder
 
 from .build import _impl_jax  # TODO: setup.py changes dir
+from .utils import check_array
 
 
 # **********************
@@ -51,9 +52,16 @@ rasterize.defvjp(rasterize_fwd, rasterize_bwd)
 # *  SUPPORT FOR JIT COMPILATION  *
 # *********************************
 
-# For JIT compilation we need a function to evaluate the shape and dtype of the
-# outputs of our op for some given inputs
+
+# Abstract Evaluation function for JIT. We also check shapes and dtypes here.
 def _rasterize_prim_abstract(pos, tri, ranges, w, h, enable_db):
+    # sanity check
+    check_array("pos", pos, shapes=[(None, None, 4), (None, 4)], dtype=jnp.float32)
+    check_array("tri", tri, shapes=[(None, 3)], dtype=jnp.int32)
+    if len(pos.shape) == 2:
+        # ranges mode
+        check_array("ranges", ranges, shapes=[(None, 2)], dtype=jnp.int32)
+    # return
     dtype = jax.dtypes.canonicalize_dtype(pos.dtype)
     n = pos.shape[0] if len(pos.shape) > 2 else ranges.shape[0]
     assert n > 0
@@ -76,18 +84,13 @@ def _rasterize_prim_translation_gpu(c: XlaBuilder, pos, tri, ranges, w, h, enabl
 
     instance_mode = len(dims_pos) > 2
     if instance_mode:
-        # we are in instance-mode
-        assert len(dims_pos) == 3 and dims_pos[-1] == 4, "[nvdiffrast]: instance mode, pos must have shape [>0, >0, 4]"
-        assert len(dims_tri) == 2 and dims_tri[-1] == 3, "[nvdiffrast]: instance mode, tri must have shape [>0, 3]"
-        N, V = dims_pos[:2]
-        F = dims_tri[0]
+        N, V, F = dims_pos[0], dims_pos[1], dims_tri[0]
+        pos_count = N * V * 4
+        vtx_per_instance = V
     else:
-        assert len(dims_pos) == 2 and dims_pos[-1] == 4, "[nvdiffrast]: instance mode, pos must have shape [>0, 4]"
-        assert len(dims_tri) == 2 and dims_tri[-1] == 3, "[nvdiffrast]: instance mode, tri must have shape [>0, 3]"
-        assert len(dims_rng) == 2 and dims_rng[-1] == 2, "[nvdiffrast]: instance mode, tri must have shape [>0, 2]"
-        N = dims_rng[0]
-        V = dims_pos[0]
-        F = dims_tri[0]
+        N, V, F = dims_rng[0], dims_pos[0], dims_tri[0]
+        pos_count = V * 4
+        vtx_per_instance = 0
     # get output shape
     out_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4], [3, 2, 1, 0])
     odb_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4 if enable_db else 0], [3, 2, 1, 0])
@@ -98,22 +101,27 @@ def _rasterize_prim_translation_gpu(c: XlaBuilder, pos, tri, ranges, w, h, enabl
         width=w, height=h, depth=N,
         enable_db=enable_db,
         instance_mode=instance_mode,
-        pos_count=(N*V*4) if instance_mode else (V*4),
+        pos_count=pos_count,
         tri_count=F*3,
-        vtx_per_instance=V if instance_mode else 0,
+        vtx_per_instance=vtx_per_instance,
     )
 
+    operands = (pos, tri, ranges)
     return xla_client.ops.CustomCallWithLayout(
         c,
         b"rasterize_fwd",
-        operands=(pos, tri, ranges),
-        operand_shapes_with_layout=(c.get_shape(pos), c.get_shape(tri), c.get_shape(ranges)),
+        operands=operands,
+        operand_shapes_with_layout=tuple([c.get_shape(x) for x in operands]),
         shape_with_layout=xla_client.Shape.tuple_shape((out_shape, odb_shape)),
         opaque=opaque,
     )
 
 
 def _rasterize_grad_prim_abstract(pos, tri, out, dy, ddb, w, h, enable_db):
+    # check gradients
+    check_array("dy", dy, shapes=[out.shape], dtype=out.dtype)
+    check_array("ddb", ddb, shapes=[out.shape[:3] + ((0, 4),)], dtype=out.dtype)
+    # return abstract array
     dtype = jax.dtypes.canonicalize_dtype(pos.dtype)
     N, V, _4 = pos.shape
     return (ShapedArray((N, V, _4), dtype),)
@@ -126,18 +134,15 @@ def _rasterize_grad_prim_translation_gpu(c: XlaBuilder, pos, tri, out, dy, ddb, 
     dims_tri = shape_tri.dimensions()
 
     instance_mode = len(dims_pos) > 2
-    if instance_mode:
-        # we are in instance-mode
-        assert len(dims_pos) == 3 and dims_pos[-1] == 4, "[nvdiffrast]: instance mode, pos must have shape [>0, >0, 4]"
-        assert len(dims_tri) == 2 and dims_tri[-1] == 3, "[nvdiffrast]: instance mode, tri must have shape [>0, 3]"
-        V = dims_pos[1]
-        F = dims_tri[0]
-    else:
-        assert len(dims_pos) == 2 and dims_pos[-1] == 4, "[nvdiffrast]: instance mode, pos must have shape [>0, 4]"
-        assert len(dims_tri) == 2 and dims_tri[-1] == 3, "[nvdiffrast]: instance mode, tri must have shape [>0, 3]"
-        V = dims_pos[0]
-        F = dims_tri[0]
     N = c.get_shape(out).dimensions()[0]
+    if instance_mode:
+        V, F = dims_pos[1], dims_tri[0]
+        pos_count = N * V * 4
+        vtx_per_instance = V
+    else:
+        V, F = dims_pos[0], dims_tri[0]
+        pos_count = V * 4
+        vtx_per_instance = 0
 
     # Encapsulate the information using the 'opaque' parameter
     opaque = _impl_jax.build_rasterize_descriptor(
@@ -145,16 +150,17 @@ def _rasterize_grad_prim_translation_gpu(c: XlaBuilder, pos, tri, out, dy, ddb, 
         width=w, height=h, depth=N,
         enable_db=enable_db,
         instance_mode=instance_mode,
-        pos_count=(N*V*4) if instance_mode else (V*4),
+        pos_count=pos_count,
         tri_count=F*3,
-        vtx_per_instance=V if instance_mode else 0,
+        vtx_per_instance=vtx_per_instance,
     )
 
+    operands = (pos, tri, out, dy, ddb)
     return xla_client.ops.CustomCallWithLayout(
         c,
         b"rasterize_bwd",
-        operands=(pos, tri, out, dy, ddb),
-        operand_shapes_with_layout=(c.get_shape(pos), c.get_shape(tri), c.get_shape(out), c.get_shape(dy), c.get_shape(ddb)),
+        operands=operands,
+        operand_shapes_with_layout=tuple([c.get_shape(x) for x in operands]),
         shape_with_layout=xla_client.Shape.tuple_shape((shape_pos,)),
         opaque=opaque,
     )

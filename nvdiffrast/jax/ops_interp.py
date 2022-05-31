@@ -9,11 +9,8 @@ from jax.abstract_arrays import ShapedArray
 from jaxlib.xla_extension import XlaBuilder
 
 from .build import _impl_jax  # TODO: setup.py changes dir
+from .utils import check_array
 
-_MSG_SHAPE_ATTR = "'attr' should be in shape [num_batch, num_verts, num_attrs] (instance mode), or [num_verts, num_attrs] (range mode)"
-_MSG_SHAPE_RAST = "'rast' is the first output of rasterize(), should be in shape [num_batch, height, width, 4]"
-_MSG_SHAPE_RAST_DB = "'rast_db' is the second output of rasterize(), should in shape [num_batch, height, width, 4|0]"
-_MSG_SHAPE_TRI = "'tri' should be in shape [num_triangles, 3]"
 
 # **********************
 # *  USER'S INTERFACE  *
@@ -70,11 +67,13 @@ def _parse_diff_attrs(diff_attrs, A):
 # For JIT compilation we need a function to evaluate the shape and dtype of the
 # outputs of our op for some given inputs
 def _interpolate_prim_abstract(attr, rast, tri, rast_db, diff_attrs):
-    assert attr.ndim in [2, 3], _MSG_SHAPE_ATTR
-    assert rast.ndim == 4 and rast.shape[3] == 4, _MSG_SHAPE_RAST
-    assert tri.ndim == 2, _MSG_SHAPE_TRI
-    assert rast_db.ndim == 4 and rast_db.shape[3] in [0, 4], _MSG_SHAPE_RAST_DB
+    # check inputs
+    check_array("attr", attr, shapes=[(None, None, None), (None, None)], dtype=jnp.float32)
+    check_array("rast", rast, shapes=[(None, None, None, 4)], dtype=jnp.float32)
+    check_array("tri", tri, shapes=[(None, 3)], dtype=jnp.int32)
+    check_array("rast_db", rast_db, shapes=[(None, None, None, (0, 4))], dtype=jnp.float32)
     assert isinstance(diff_attrs, (tuple, list)), "invalid type: {}".format(type(diff_attrs))
+    # return abstract array
     dtype = jax.dtypes.canonicalize_dtype(attr.dtype)
     N, H, W = rast.shape[:3]
     A = attr.shape[-1]
@@ -89,7 +88,7 @@ def _interpolate_prim_translation_gpu(c: XlaBuilder, attr, rast, tri, rast_db, d
     dtype = c.get_shape(attr).element_type()
     dims_attr = c.get_shape(attr).dimensions()
     dims_rast = c.get_shape(rast).dimensions()
-    dims_tri  = c.get_shape(tri).dimensions()
+    dims_tri = c.get_shape(tri).dimensions()
     dims_rast_db = c.get_shape(rast_db).dimensions()
 
     # get mode booleans
@@ -126,7 +125,10 @@ def _interpolate_prim_translation_gpu(c: XlaBuilder, attr, rast, tri, rast_db, d
 
 
 def _interpolate_grad_prim_abstract(attr, rast, tri, dy, rast_db, dda, diff_attrs):
-    # TODO: check dy, dda shape
+    # check dy, dda shape
+    check_array("dy", dy, shapes=[rast.shape[:3] + (attr.shape[-1],)], dtype=attr.dtype)
+    check_array("dda", dda, shapes=[rast.shape[:3] + ((0, len(diff_attrs)*2),)], dtype=attr.dtype)
+    # return abstract array
     dtype = jax.dtypes.canonicalize_dtype(attr.dtype)
     return (
         ShapedArray(attr.shape, dtype),
@@ -138,7 +140,7 @@ def _interpolate_grad_prim_abstract(attr, rast, tri, dy, rast_db, dda, diff_attr
 def _interpolate_grad_prim_translation_gpu(c: XlaBuilder, attr, rast, tri, dy, rast_db, dda, diff_attrs, *args):
     dims_attr = c.get_shape(attr).dimensions()
     dims_rast = c.get_shape(rast).dimensions()
-    dims_tri  = c.get_shape(tri).dimensions()
+    dims_tri = c.get_shape(tri).dimensions()
     dims_rast_db = c.get_shape(rast_db).dimensions()
 
     # get mode booleans

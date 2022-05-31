@@ -14,7 +14,7 @@ namespace py = pybind11;
 
 pybind11::dict Registrations() {
     // TODO: better place to init logging
-    // google::InitGoogleLogging("[nvdiffrast]");
+    google::InitGoogleLogging("[nvdiffrast]");
 
     pybind11::dict dict;
     dict["rasterize_fwd"] = EncapsulateFunction(rasterizeFwd);
