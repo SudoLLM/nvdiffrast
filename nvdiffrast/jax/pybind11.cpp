@@ -96,6 +96,41 @@ void RegisterDescriptors(py::module_ & m) {
         py::arg("instance_mode"),
         py::arg("alloc_triangles")
     );
+
+    m.def("build_texture_descriptor", 
+        [](
+            int filterMode,
+            int boundaryMode,
+            int texBatchSize,
+            int texHeight,
+            int texWidth,
+            int texChannels,
+            int uvBatchSize,
+            int uvHeight,
+            int uvWidth
+        ) {
+            return PackDescriptor(TextureDescriptor{
+                filterMode,
+                boundaryMode,
+                texBatchSize,
+                texHeight,
+                texWidth,
+                texChannels,
+                uvBatchSize,
+                uvHeight,
+                uvWidth
+            });
+        },
+        py::arg("filter_mode"),
+        py::arg("boundary_mode"),
+        py::arg("tex_n"),
+        py::arg("tex_h"),
+        py::arg("tex_w"),
+        py::arg("tex_c"),
+        py::arg("uv_n"),
+        py::arg("uv_h"),
+        py::arg("uv_w")
+    );
 }
 
 PYBIND11_MODULE(_impl_jax, m) {
