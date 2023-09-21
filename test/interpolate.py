@@ -23,6 +23,7 @@ verts = np.pad(verts, [[0, 0], [0, 1]], "constant", constant_values=1)
 # batch
 verts = verts[np.newaxis].repeat(4, axis=0)
 depth = depth[np.newaxis].repeat(4, axis=0)
+viz_bi = 1
 
 A = 256
 enable_db = True
@@ -35,7 +36,7 @@ def try_torch(verts, tris):
     import nvdiffrast.torch as dr
     print(">>> Run PyTorch version...")
 
-    glctx = dr.RasterizeGLContext(enable_db)
+    glctx = dr.RasterizeCudaContext("cuda:0")
     pos = torch.tensor(verts, dtype=torch.float32, device="cuda:0", requires_grad=True)
     tri = torch.tensor(tris, dtype=torch.int32, device="cuda:0")
     attr = torch.tensor(depth, dtype=torch.float32, device="cuda:0", requires_grad=True)
@@ -55,8 +56,8 @@ def try_torch(verts, tris):
     grad_rast_db = grad_rast_db.detach().cpu().numpy()
     grad_attr = grad_attr.detach().cpu().numpy()
     grad_pos = grad_pos.detach().cpu().numpy()
-    cv2.imwrite(f"{TDIR}/torch_rast.png", np.clip(rast_out[0, ..., :3] * 255, 0, 255).astype(np.uint8))
-    cv2.imwrite(f"{TDIR}/torch_depth.png", np.clip(pix_depth[0, ..., :] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/torch_rast.png", np.clip(rast_out[viz_bi, ..., :3] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/torch_depth.png", np.clip(pix_depth[viz_bi, ..., :] * 255, 0, 255).astype(np.uint8))
     np.save(f"{TDIR}/torch_rast.npy", rast_out)
     np.save(f"{TDIR}/torch_depth.npy", pix_depth)
     np.save(f"{TDIR}/torch_grad_rast.npy", grad_rast)
@@ -100,8 +101,8 @@ def try_jax(verts, tris):
     grad_rast_db = jax.device_get(grad_rast_db)
     grad_attr = jax.device_get(grad_attr)
     grad_pos = jax.device_get(grad_pos)
-    cv2.imwrite(f"{TDIR}/jax_rast.png", np.clip(rast_out[0, ..., :3] * 255, 0, 255).astype(np.uint8))
-    cv2.imwrite(f"{TDIR}/jax_depth.png", np.clip(pix_depth[0, ..., :] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/jax_rast.png", np.clip(rast_out[viz_bi, ..., :3] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/jax_depth.png", np.clip(pix_depth[viz_bi, ..., :] * 255, 0, 255).astype(np.uint8))
     np.save(f"{TDIR}/jax_rast.npy", rast_out)
     np.save(f"{TDIR}/jax_depth.npy", pix_depth)
     np.save(f"{TDIR}/jax_grad_rast.npy", grad_rast)

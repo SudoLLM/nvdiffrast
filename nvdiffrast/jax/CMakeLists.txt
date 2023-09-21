@@ -7,7 +7,6 @@ project(_impl_jax LANGUAGES CXX)
 enable_language(CUDA)
 
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
-set(pybind11_DIR ~/work/.local/lib/python3.7/site-packages/pybind11/share/cmake/pybind11)
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(
@@ -16,16 +15,19 @@ pybind11_add_module(
     ${PROJECT_SOURCE_DIR}/../common/glutil.cpp
     ${PROJECT_SOURCE_DIR}/../common/rasterize.cu
     # ${PROJECT_SOURCE_DIR}/../common/rasterize.cpp
-    ${PROJECT_SOURCE_DIR}/../common/cudaraster/Buffer.cpp
-    ${PROJECT_SOURCE_DIR}/../common/cudaraster/CudaRaster.cpp
-    ${PROJECT_SOURCE_DIR}/../common/cudaraster/RasterImpl.cpp
+    ${PROJECT_SOURCE_DIR}/../common/cudaraster/impl/Buffer.cpp
+    ${PROJECT_SOURCE_DIR}/../common/cudaraster/impl/CudaRaster.cpp
+    ${PROJECT_SOURCE_DIR}/../common/cudaraster/impl/RasterImpl.cu
+    ${PROJECT_SOURCE_DIR}/../common/cudaraster/impl/RasterImpl.cpp
     ${PROJECT_SOURCE_DIR}/../common/interpolate.cu
     ${PROJECT_SOURCE_DIR}/../common/antialias.cu
     ${PROJECT_SOURCE_DIR}/pybind11.cpp
     ${PROJECT_SOURCE_DIR}/jax_rasterize_cuda.cpp
+    # ${PROJECT_SOURCE_DIR}/jax_rasterize_gl.cpp
     ${PROJECT_SOURCE_DIR}/jax_interpolate.cpp
     ${PROJECT_SOURCE_DIR}/jax_antialias.cpp
 )
+
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 target_link_libraries     (${PROJECT_NAME} PUBLIC GL EGL glog cuda)
 target_compile_features   (${PROJECT_NAME} PUBLIC cxx_std_11)

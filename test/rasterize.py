@@ -16,6 +16,7 @@ verts -= verts.mean(axis=0)[None]
 verts[:, 2] -= 1
 verts = np.pad(verts, [[0, 0], [0, 1]], mode="constant", constant_values=1)  # type: ignore
 verts = verts[np.newaxis].repeat(4, axis=0)
+viz_bi = 1
 print(verts.shape, np.prod(verts.shape))
 print(tris.shape, np.prod(tris.shape))
 A = 256
@@ -39,8 +40,8 @@ def try_tch(verts: npt.NDArray[np.float32], tris: npt.NDArray[np.int32]):
 
     rast_out = rast_out.detach().cpu().numpy()
     out_db = out_db.detach().cpu().numpy()
-    cv2.imwrite(f"{TDIR}/tch_rast.png", np.clip(rast_out[0, ..., :3] * 255, 0, 255).astype(np.uint8))
-    cv2.imwrite(f"{TDIR}/tch_rast_db.png", np.clip(out_db[0, ..., :3] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/tch_rast.png", np.clip(rast_out[viz_bi, ..., :3] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/tch_rast_db.png", np.clip(out_db[viz_bi, ..., :3] * 255, 0, 255).astype(np.uint8))
     np.save(f"{TDIR}/tch_rast.npy", rast_out)
     np.save(f"{TDIR}/tch_rast_db.npy", out_db)
     np.save(f"{TDIR}/tch_grad_pos.npy", grad.detach().cpu().numpy())
@@ -67,8 +68,8 @@ def try_jax(verts: npt.NDArray[np.float32], tris: npt.NDArray[np.int32]):
     print(rast_out.dtype, type(rast_out))
     print(rast_out.shape)
     print(rast_out.min(), rast_out.max())
-    cv2.imwrite(f"{TDIR}/jax_rast.png", np.clip(rast_out[0, ..., :3] * 255, 0, 255).astype(np.uint8))
-    cv2.imwrite(f"{TDIR}/jax_rast_db.png", np.clip(out_db[0, ..., :3] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/jax_rast.png", np.clip(rast_out[viz_bi, ..., :3] * 255, 0, 255).astype(np.uint8))
+    cv2.imwrite(f"{TDIR}/jax_rast_db.png", np.clip(out_db[viz_bi, ..., :3] * 255, 0, 255).astype(np.uint8))
     np.save(f"{TDIR}/jax_rast.npy", rast_out)
     np.save(f"{TDIR}/jax_rast_db.npy", out_db)
     np.save(f"{TDIR}/jax_grad_pos.npy", grad_pos)
@@ -81,6 +82,10 @@ cmp_names = ["rast", "rast_db", "grad_pos"]
 for name in cmp_names:
     out_tch = np.load(f"{TDIR}/tch_{name}.npy")
     out_jax = np.load(f"{TDIR}/jax_{name}.npy")
+    if name.startswith("rast"):
+        delta = out_tch - out_jax
+        print(delta.shape)
+        cv2.imwrite(f"{TDIR}/delta_{name}.png", np.clip(np.abs(delta[viz_bi, ..., :3]) * 255, 0, 255).astype(np.uint8))
     print(f"> Compare '{name} ({out_jax.shape})'...")
     print(f"  tch: {out_tch.min():.10f}~{out_tch.max():.10f}")
     print(f"  jax: {out_jax.min():.10f}~{out_jax.max():.10f}")

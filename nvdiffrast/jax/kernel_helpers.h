@@ -3,6 +3,7 @@
 // descriptors that are used with the "opaque" parameter of the GPU custom call. In our example
 // we'll use this parameter to pass the size of our problem.
 #pragma once
+#include <cstring>
 #include <cstdint>
 #include <stdexcept>
 #include <string>

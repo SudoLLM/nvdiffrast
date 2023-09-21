@@ -3,6 +3,7 @@
 #include "kernel_helpers.h"
 #include "jax_rasterize.h"
 #include "../common/common.h"
+#include "../common/framework.h"
 #include "../common/rasterize.h"
 #include "../common/cudaraster/CudaRaster.hpp"
 #include "../common/cudaraster/impl/Constants.hpp"
@@ -13,7 +14,7 @@ void RasterizeGradKernel(const RasterizeGradParams p);
 void RasterizeGradKernelDb(const RasterizeGradParams p);
 
 // TODO: support different instance?
-std::unqiue_ptr<CR::CudaRaster> g_cr(nullptr);
+std::unique_ptr<CR::CudaRaster> g_cr(nullptr);
 
 void rasterizeFwd(
     cudaStream_t stream,
@@ -43,10 +44,14 @@ void rasterizeFwd(
     // if (!d.enableDB) outPtrs[1] = nullptr;
     // assert(d.enableDB);  // In torch impl, it's always enabled.
 
+    // Get position and triangle buffer sizes in vertices / triangles.
+    int posCount = d.numVertices;
+    int triCount = d.numTriangles;
+
     // Set up CudaRaster.
     cr->setViewportSize(d.width, d.height, d.depth);
-    cr->setVertexBuffer((void*)posPtr, d.posCount);
-    cr->setIndexBuffer ((void*)triPtr, d.triCount);
+    cr->setVertexBuffer((void*)posPtr, posCount);
+    cr->setIndexBuffer ((void*)triPtr, triCount);
 
     bool enablePeel = false; // TODO: support peeling_idx
     cr->setRenderModeFlags(enablePeel ? CR::CudaRaster::RenderModeFlag_EnableDepthPeeling : 0);  // No backface culling.
@@ -68,10 +73,10 @@ void rasterizeFwd(
     p.out_db = outPtrs[1];
     p.numTriangles = triCount;
     p.numVertices = posCount;
-    p.width  = width;
-    p.height = height;
-    p.depth  = depth;
-    p.instance_mode = (pos.sizes().size() > 2) ? 1 : 0;
+    p.width  = d.width;
+    p.height = d.height;
+    p.depth  = d.depth;
+    p.instance_mode = (d.instanceMode) ? 1 : 0;  // (pos.sizes().size() > 2) ? 1 : 0;
     p.xs = 2.f / (float)p.width;
     p.xo = 1.f / (float)p.width - 1.f;
     p.ys = 2.f / (float)p.height;
