@@ -17,8 +17,9 @@ from .utils import check_array
 # *  USER'S INTERFACE  *
 # **********************
 
-@partial(jax.custom_vjp, nondiff_argnums=(2, 4))
+@partial(jax.custom_vjp, nondiff_argnums=(0, 3, 5))
 def rasterize(
+    ctx: Any,
     pos: Array,
     tri: Array,
     resolution: Tuple[int, int],
@@ -31,6 +32,7 @@ def rasterize(
 
 
 def rasterize_fwd(
+    ctx: Any,
     pos: Array,
     tri: Array,
     resolution: Tuple[int, int],
@@ -43,8 +45,9 @@ def rasterize_fwd(
     return (rast_out, db_out), (pos, tri, rast_out)  # output, 'res' for bwd
 
 
-# nondiff_argnums 2, 4 start the arguments list
+# nondiff_argnums start the arguments list
 def rasterize_bwd(
+    ctx: Any,
     resolution: Tuple[int, int],
     grad_db: Array,
     fwd_res: Tuple[Array, Array, Array],
@@ -79,7 +82,7 @@ def _rasterize_prim_abstract(pos: ShapedArray, tri: ShapedArray, ranges: ShapedA
     assert n > 0
     return (
         ShapedArray((n, h, w, 4), dtype),
-        ShapedArray((n, h, w, 4 if enable_db else 0), dtype)
+        ShapedArray((n, h, w, 4), dtype)
     )
 
 
@@ -87,7 +90,9 @@ def _rasterize_prim_abstract(pos: ShapedArray, tri: ShapedArray, ranges: ShapedA
 # our case this is the custom XLA op that we've written. We're wrapping two
 # translation rules into one here: one for the CPU and one for the GPU
 def _rasterize_prim_translation_gpu(
-    c: XlaBuilder, pos: XlaOp, tri: XlaOp, ranges: XlaOp, w: int, h: int, enable_db: bool, *args: Any
+    c: XlaBuilder,
+    pos: XlaOp, tri: XlaOp, ranges: XlaOp,
+    w: int, h: int, enable_db: bool, *args: Any
 ):
     dtype = c.get_shape(pos).element_type()
     shape_pos = c.get_shape(pos)
@@ -108,7 +113,6 @@ def _rasterize_prim_translation_gpu(
     # get output shape
     out_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4], [3, 2, 1, 0])
     odb_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4], [3, 2, 1, 0])
-    # odb_shape = xla_client.Shape.array_shape(dtype, [N, h, w, 4 if enable_db else 0], [3, 2, 1, 0])
 
     # Encapsulate the information using the 'opaque' parameter
     opaque = _impl_jax.build_rasterize_descriptor(

@@ -81,12 +81,12 @@ def try_jax(verts, tris):
     def loss_fn(rast_out, rast_db, attr, tri):
         pix_depth, pix_depth_db = ops.interpolate(attr, rast_out, tri, rast_db, diff_attrs=diff_attrs)
         return (pix_depth.mean() + pix_depth_db.mean()), (pix_depth, pix_depth_db)
-    rast_out, rast_db = ops.rasterize(pos, tri, (A, A), grad_db=enable_db)
+    rast_out, rast_db = ops.rasterize(None, pos, tri, (A, A), grad_db=enable_db)
     (loss, (pix_depth, pix_depth_db)), (grad_rast, grad_rast_db, grad_attr) = \
         jax.value_and_grad(loss_fn, argnums=(0, 1, 2), has_aux=True)(rast_out, rast_db, attr, tri)
 
     def loss_fn(pos, attr, tri):
-        rast_out, rast_db = ops.rasterize(pos, tri, (A, A), grad_db=enable_db)
+        rast_out, rast_db = ops.rasterize(None, pos, tri, (A, A), grad_db=enable_db)
         pix_depth, pix_depth_db = ops.interpolate(attr, rast_out, tri, rast_db, diff_attrs=diff_attrs)
         return (pix_depth.mean() + pix_depth_db.mean()), (rast_out, rast_db, pix_depth, pix_depth_db)
     (loss, (rast_out, rast_db, pix_depth, pix_depth_db)), (grad_pos, grad_attr) = \

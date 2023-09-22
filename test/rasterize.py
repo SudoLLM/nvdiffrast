@@ -14,6 +14,11 @@ os.makedirs(TDIR, exist_ok=True)
 verts, tris, _ = load_mesh(os.path.join(ROOT, "data/cow_mesh/cow.obj"))
 verts -= verts.mean(axis=0)[None]
 verts[:, 2] -= 1
+
+# vertices -> triangles.
+verts = verts[tris.flatten()]
+tris = np.arange(verts.shape[0], dtype=tris.dtype).reshape(-1, 3)
+
 verts = np.pad(verts, [[0, 0], [0, 1]], mode="constant", constant_values=1)  # type: ignore
 verts = verts[np.newaxis].repeat(4, axis=0)
 viz_bi = 1
@@ -54,7 +59,7 @@ def try_jax(verts: npt.NDArray[np.float32], tris: npt.NDArray[np.int32]):
     tri = jnp.asarray(tris, dtype=jnp.int32)
 
     def loss_fn(pos: jax.Array, tri: jax.Array):
-        rast_out, out_db = ops.rasterize(pos, tri, (A, A), grad_db=enable_db)
+        rast_out, out_db = ops.rasterize(None, pos, tri, (A, A), grad_db=enable_db)
         return rast_out.mean(), (rast_out, out_db)
 
     (loss, (rast_out, out_db)), grad_pos = jax.value_and_grad(loss_fn, has_aux=True)(pos, tri)

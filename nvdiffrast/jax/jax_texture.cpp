@@ -88,8 +88,8 @@ void textureFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t 
     // All inputs and outputs are given in buffers.
     size_t iBuf = 0;
     // - Inputs
-    const float   * texPtr    = reinterpret_cast<const float *>(buffers[iBuf++]);
-    const int32_t * uvsPtr    = reinterpret_cast<const float *>(buffers[iBuf++]);
+    const float * texPtr = reinterpret_cast<const float *>(buffers[iBuf++]);
+    const float * uvPtr  = reinterpret_cast<const float *>(buffers[iBuf++]);
     // - Outputs
     float * outPtr = reinterpret_cast<float *>(buffers[iBuf++]);
 
@@ -98,7 +98,6 @@ void textureFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t 
 
     TextureKernelParams p = {}; // Initialize all fields to zero.
     bool has_mip_stack = false;
-    torch::Tensor& mip_w = mip_wrapper.mip; // Unwrap.
     int max_mip_level = 0; // TODO: not sure.
     set_modes(p, d.filterMode, d.boundaryMode, max_mip_level);
 
@@ -110,8 +109,8 @@ void textureFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t 
     //     NVDR_CHECK(has_mip_stack || mip_w.defined(), "mipmapping filter mode requires mip wrapper or mip stack input");
     // }
     
-    bool cude_mode = false;
-    if (!cude_mode) {
+    bool cube_mode = false;
+    if (!cube_mode) {
         p.texHeight = d.texHeight;
         p.texWidth = d.texWidth;
         p.channels = d.texChannels;
@@ -126,7 +125,7 @@ void textureFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t 
     p.texDepth = d.texBatchSize;
 
     p.tex[0] = texPtr;
-    p.uv = uvsPtr;
+    p.uv = uvPtr;
     p.uvDA = nullptr;
     p.mipLevelBias = nullptr;
 
@@ -158,10 +157,12 @@ void textureFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t 
         NVDR_CHECK(!((uintptr_t)p.out    & 7), "out output tensor not aligned to float2");
         NVDR_CHECK(!((uintptr_t)pmip     & 7), "mip input tensor not aligned to float2");
     }
-    if (!cube_mode)
+    if (!cube_mode) {
         NVDR_CHECK(!((uintptr_t)p.uvDA & 15), "uv_da input tensor not aligned to float4");
-    else
+    }
+    else {
         NVDR_CHECK(!((uintptr_t)p.uvDA & 7), "uv_da input tensor not aligned to float2");
+    }
 
     // Choose launch parameters for texture lookup kernel.
     dim3 blockSize = getLaunchBlockSize(TEX_FWD_MAX_KERNEL_BLOCK_WIDTH, TEX_FWD_MAX_KERNEL_BLOCK_HEIGHT, p.imgWidth, p.imgHeight);
@@ -235,15 +236,15 @@ void textureLinearBwd(cudaStream_t stream, void **buffers, const char *opaque, s
     // All buffers.
     size_t iBuf = 0;
     // Inputs
-    const float   * texPtr = reinterpret_cast<const float   *>(buffers[iBuf++]);
-    const float   * uvPtr  = reinterpret_cast<const float   *>(buffers[iBuf++]);
-    const float   * dyPtr  = reinterpret_cast<const float   *>(buffers[iBuf++]);
+    const float * texPtr = reinterpret_cast<const float *>(buffers[iBuf++]);
+    const float * uvPtr  = reinterpret_cast<const float *>(buffers[iBuf++]);
+    const float * dyPtr  = reinterpret_cast<const float *>(buffers[iBuf++]);
     // Outputs
     float * gradTexPtr = reinterpret_cast<float *>(buffers[iBuf++]);
     float * gradUvPtr  = reinterpret_cast<float *>(buffers[iBuf++]);
 
     // Get descriptor
-    auto const & d = *UnpackDescriptor<RasterizeDescriptor>(opaque, opaque_len);
+    auto const & d = *UnpackDescriptor<TextureDescriptor>(opaque, opaque_len);
 
     TextureKernelParams p = {}; // Initialize all fields to zero.
     bool has_mip_stack = false;

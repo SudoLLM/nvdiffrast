@@ -21,11 +21,14 @@ pybind11_add_module(
     ${PROJECT_SOURCE_DIR}/../common/cudaraster/impl/RasterImpl.cpp
     ${PROJECT_SOURCE_DIR}/../common/interpolate.cu
     ${PROJECT_SOURCE_DIR}/../common/antialias.cu
+    ${PROJECT_SOURCE_DIR}/../common/texture.cu
+    ${PROJECT_SOURCE_DIR}/../common/texture.cpp
     ${PROJECT_SOURCE_DIR}/pybind11.cpp
     ${PROJECT_SOURCE_DIR}/jax_rasterize_cuda.cpp
     # ${PROJECT_SOURCE_DIR}/jax_rasterize_gl.cpp
     ${PROJECT_SOURCE_DIR}/jax_interpolate.cpp
     ${PROJECT_SOURCE_DIR}/jax_antialias.cpp
+    ${PROJECT_SOURCE_DIR}/jax_texture.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})

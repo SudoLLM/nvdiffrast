@@ -60,6 +60,7 @@ def read_obj_np(filename_obj, expect_indices=None, normalization=False):
         lines = f.readlines()
 
     verts = []
+    verts_uv = []
     verts_rgb = []
     for line in lines:
         line = line.strip().split()
@@ -71,23 +72,36 @@ def read_obj_np(filename_obj, expect_indices=None, normalization=False):
                 verts_rgb.append([float(v) for v in line[4:7]])
             else:
                 verts_rgb.append([1.0, 1.0, 1.0])
+        elif line[0] == "vt":
+            verts_uv.append([float(v) for v in line[1:3]])
     verts = np.vstack(verts).astype(np.float32)
     verts_rgb = np.vstack(verts_rgb).astype(np.float32)
+    verts_uv = np.vstack(verts_uv).astype(np.float32)
 
     # load faces
     faces = []
+    faces_tex = []
     for line in lines:
         if len(line.split()) == 0:
             continue
         if line.split()[0] == "f":
             vs = line.split()[1:]
             nv = len(vs)
+
             v0 = int(vs[0].split("/")[0])
             for i in range(nv - 2):
                 v1 = int(vs[i + 1].split("/")[0])
                 v2 = int(vs[i + 2].split("/")[0])
                 faces.append((v0, v1, v2))
+
+            v0 = int(vs[0].split("/")[1])
+            for i in range(nv - 2):
+                v1 = int(vs[i + 1].split("/")[1])
+                v2 = int(vs[i + 2].split("/")[1])
+                faces_tex.append((v0, v1, v2))
+
     faces = (np.vstack(faces) - 1).astype(np.int32)
+    faces_tex = (np.vstack(faces_tex) - 1).astype(np.int32)
 
     # normalize into a unit cube centered zero
     if normalization:
@@ -102,4 +116,8 @@ def read_obj_np(filename_obj, expect_indices=None, normalization=False):
     if expect_indices is not None:
         assert np.all(expect_indices == faces)
 
-    return verts, faces, dict(verts_rgb=verts_rgb)
+    return verts, faces, dict(
+        verts_rgb=verts_rgb,
+        verts_uv=verts_uv,
+        faces_tex=faces_tex,
+    )

@@ -38,9 +38,15 @@ def texture(
     filter_mode: str = 'auto',
     boundary_mode: str = 'wrap',
 ) -> Tuple[Array, Array]:
-    w, h = resolution
-    _ranges = ranges if ranges is not None else jnp.empty((0, 2), dtype=jnp.int32)
-    return _texture_prim.bind(pos, tri, _ranges, w=w, h=h, enable_db=grad_db)  # type: ignore
+    if filter_mode == 'auto':
+        filter_mode = 'linear'
+    # Convert filter mode to internal enumeration.
+    filter_mode_enum = filter_mode_dict[filter_mode]
+    # Convert boundary mode to internal enumeration.
+    boundary_mode_enum = boundary_mode_dict[boundary_mode]
+
+    out = _texture_prim.bind(tex, uv, filter_mode_enum, boundary_mode_enum)
+    return out
 
 
 def texture_fwd(
@@ -52,10 +58,12 @@ def texture_fwd(
     if filter_mode == 'auto':
         filter_mode = 'linear'
     # Convert filter mode to internal enumeration.
-    filter_mode_enum = filter_mode_dict[filter_mode]
+    filter_mode_enum = int(filter_mode_dict[filter_mode])
     # Convert boundary mode to internal enumeration.
-    boundary_mode_enum = boundary_mode_dict[boundary_mode]
-
+    boundary_mode_enum = int(boundary_mode_dict[boundary_mode])
+    assert filter_mode_enum == 1
+    assert boundary_mode_enum == 1
+    
     out = _texture_prim.bind(tex, uv, filter_mode_enum, boundary_mode_enum)
     return out, (tex, uv)  # output, 'res' for bwd
 
@@ -73,11 +81,12 @@ def texture_bwd(
     filter_mode_enum = filter_mode_dict[filter_mode]
     # Convert boundary mode to internal enumeration.
     boundary_mode_enum = boundary_mode_dict[boundary_mode]
+    assert filter_mode_enum == 1
+    assert boundary_mode_enum == 1
 
     tex, uv = fwd_res
     dy = d_out
     
-    assert filter_mode == 'linear'
     g_tex, g_uv = _texture_grad_prim.bind(tex, uv, dy, filter_mode_enum, boundary_mode_enum)
     return (g_tex, g_uv)
 
@@ -100,11 +109,12 @@ def _texture_prim_abstract(
     # sanity check
     check_array("tex", tex, shapes=[(None, None, None, None)], dtype=jnp.float32)
     check_array("uv", uv, shapes=[(None, None, None, 2)], dtype=jnp.float32)
-    
+    assert tex.shape[0] == uv.shape[0] or tex.shape[0] == 1
+
     # return
     dtype = jax.dtypes.canonicalize_dtype(tex.dtype)
-    n, c = tex.shape[0], tex.shape[-1]
-    h, w = uv.shape[1], uv.shape[2]
+    c = tex.shape[-1]
+    n, h, w = uv.shape[0], uv.shape[1], uv.shape[2]
     return ShapedArray((n, h, w, c), dtype)
 
 
@@ -133,8 +143,8 @@ def _texture_prim_translation_gpu(
 
     # Encapsulate the information using the 'opaque' parameter
     opaque = _impl_jax.build_texture_descriptor(
-        filter_mode=filter_mode_enum,
-        boundary_mode=boundary_mode_enum,
+        filter_mode=1, # TODO: hack
+        boundary_mode=1, # TODO: hack
         tex_n=dims_tex[0],
         tex_h=dims_tex[1],
         tex_w=dims_tex[2],
@@ -150,7 +160,8 @@ def _texture_prim_translation_gpu(
         b"texture_fwd",
         operands=operands,
         operand_shapes_with_layout=tuple([builder.get_shape(x) for x in operands]),
-        shape_with_layout=xla_client.Shape.tuple_shape((out_shape,)),
+        # shape_with_layout=xla_client.Shape.tuple_shape((out_shape,)),
+        shape_with_layout=out_shape,
         opaque=opaque,
     )
 
@@ -190,8 +201,8 @@ def _texture_grad_prim_translation_gpu(
 
     # Encapsulate the information using the 'opaque' parameter
     opaque = _impl_jax.build_texture_descriptor(
-        filter_mode=filter_mode_enum,
-        boundary_mode=boundary_mode_enum,
+        filter_mode=1, # TODO: hack
+        boundary_mode=1,  # TODO: hack
         tex_n=dims_tex[0],
         tex_h=dims_tex[1],
         tex_w=dims_tex[2],
@@ -217,7 +228,7 @@ def _texture_grad_prim_translation_gpu(
 # *****************************
 
 _texture_prim = Primitive("texture")
-_texture_prim.multiple_results = True
+_texture_prim.multiple_results = False
 _texture_prim.def_impl(partial(xla.apply_primitive, _texture_prim))
 _texture_prim.def_abstract_eval(_texture_prim_abstract)
 xla.backend_specific_translations["gpu"][_texture_prim] = _texture_prim_translation_gpu  # for JIT compilation
@@ -227,4 +238,3 @@ _texture_grad_prim.multiple_results = True
 _texture_grad_prim.def_impl(partial(xla.apply_primitive, _texture_grad_prim))
 _texture_grad_prim.def_abstract_eval(_texture_grad_prim_abstract)
 xla.backend_specific_translations["gpu"][_texture_grad_prim] = _texture_grad_prim_translation_gpu  # for JIT compilation
-

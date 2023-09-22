@@ -80,7 +80,7 @@ def try_jax(verts, tris):
     tri = jnp.asarray(tris, dtype=jnp.int32)
     attr = jnp.asarray(depth, dtype=jnp.float32)
 
-    rast_out, rast_db = ops.rasterize(pos, tri, (A, A), grad_db=enable_db)
+    rast_out, rast_db = ops.rasterize(None, pos, tri, (A, A), grad_db=enable_db)
     pix_depth, pix_depth_db = ops.interpolate(attr, rast_out, tri, rast_db, diff_attrs=diff_attrs)
 
     ev_hash = ops.get_ev_hash(tri)
