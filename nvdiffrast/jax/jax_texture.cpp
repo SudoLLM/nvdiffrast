@@ -232,6 +232,16 @@ void textureFwd(cudaStream_t stream, void **buffers, const char *opaque, size_t 
 }
 
 void textureLinearBwd(cudaStream_t stream, void **buffers, const char *opaque, size_t opaque_len) {
+    // All buffers.
+    size_t iBuf = 0;
+    // Inputs
+    const float   * texPtr = reinterpret_cast<const float   *>(buffers[iBuf++]);
+    const float   * uvPtr  = reinterpret_cast<const float   *>(buffers[iBuf++]);
+    const float   * dyPtr  = reinterpret_cast<const float   *>(buffers[iBuf++]);
+    // Outputs
+    float * gradTexPtr = reinterpret_cast<float *>(buffers[iBuf++]);
+    float * gradUvPtr  = reinterpret_cast<float *>(buffers[iBuf++]);
+
     // Get descriptor
     auto const & d = *UnpackDescriptor<RasterizeDescriptor>(opaque, opaque_len);
 
@@ -260,21 +270,20 @@ void textureLinearBwd(cudaStream_t stream, void **buffers, const char *opaque, s
     p.texDepth = d.texBatchSize;
 
     // Get input pointers.
-    p.tex[0] = tex.data_ptr<float>();
-    p.uv = uv.data_ptr<float>();
-    p.dy = dy_.data_ptr<float>();
+    p.tex[0] = texPtr;
+    p.uv = uvPtr;
+    p.dy = dyPtr;
     p.uvDA = nullptr;
     p.mipLevelBias = nullptr;
 
     // Allocate output tensor for tex gradient.
-    torch::Tensor grad_tex = torch::zeros_like(tex);
-    p.gradTex[0] = grad_tex.data_ptr<float>();
+    size_t gradTexBytes = d.texBatchSize * d.texHeight * d.texWidth * d.texChannels * sizeof(float);
+    cudaMemsetAsync(gradTexPtr, 0, gradTexBytes, stream);
+    p.gradTex[0] = gradTexPtr;
 
     // Allocate output tensor for uv gradient.
-    torch::Tensor grad_uv;
     if (p.filterMode != TEX_MODE_NEAREST) {
-        grad_uv = torch::empty_like(uv);
-        p.gradUV = grad_uv.data_ptr<float>();
+        p.gradUV = gradUvPtr;
     }
 
     // Choose kernel variants based on channel count.

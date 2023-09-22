@@ -121,12 +121,12 @@ def _texture_prim_translation_gpu(
 ):
     dtype = builder.get_shape(tex).element_type()
     shape_tex = builder.get_shape(tex)
-    shape_uvs = builder.get_shape(uv)
+    shape_uv = builder.get_shape(uv)
     dims_tex = shape_tex.dimensions()
-    dims_uvs = shape_uvs.dimensions()
+    dims_uv = shape_uv.dimensions()
     
     n, c = dims_tex[0], dims_tex[-1]
-    h, w = dims_uvs[1], dims_uvs[2]
+    h, w = dims_uv[1], dims_uv[2]
 
     # get output shape
     out_shape = xla_client.Shape.array_shape(dtype, [n, h, w, c], [3, 2, 1, 0])
@@ -139,9 +139,9 @@ def _texture_prim_translation_gpu(
         tex_h=dims_tex[1],
         tex_w=dims_tex[2],
         tex_c=dims_tex[3],
-        uv_n=dims_uvs[0],
-        uv_h=dims_uvs[1],
-        uv_w=dims_uvs[2],
+        uv_n=dims_uv[0],
+        uv_h=dims_uv[1],
+        uv_w=dims_uv[2],
     )
 
     operands = (tex, uv)
@@ -150,71 +150,64 @@ def _texture_prim_translation_gpu(
         b"texture_fwd",
         operands=operands,
         operand_shapes_with_layout=tuple([builder.get_shape(x) for x in operands]),
-        # shape_with_layout=xla_client.Shape.tuple_shape((out_shape,)),
-        shape_with_layout=out_shape,
+        shape_with_layout=xla_client.Shape.tuple_shape((out_shape,)),
         opaque=opaque,
     )
 
 
 def _texture_grad_prim_abstract(
-    pos: ShapedArray,
-    tri: ShapedArray,
-    out: ShapedArray,
+    tex: ShapedArray,
+    uv: ShapedArray,
     dy: ShapedArray,
-    ddb: ShapedArray,
-    w: int, h: int, enable_db: bool
+    filter_mode_enum: int,
+    boundary_mode_enum: int,
 ):
     # check gradients
-    check_array("dy", dy, shapes=[out.shape], dtype=out.dtype)
-    check_array("ddb", ddb, shapes=[out.shape[:3] + ((0, 4),)], dtype=out.dtype)
+    check_array("dy", dy, shapes=[(uv.shape[0], uv.shape[1], uv.shape[2], tex.shape[3])], dtype=tex.dtype)
     # return abstract array
-    dtype = jax.dtypes.canonicalize_dtype(pos.dtype)
-    N, V, _4 = pos.shape  # type: ignore
-    return (ShapedArray((N, V, _4), dtype),)
+    dtype = jax.dtypes.canonicalize_dtype(tex.dtype)
+    return (
+        ShapedArray(tex.shape, dtype),
+        ShapedArray(uv.shape, dtype),
+    )
 
 
 def _texture_grad_prim_translation_gpu(
-    c: XlaBuilder,
-    pos: XlaOp, tri: XlaOp, out: XlaOp,
-    dy: XlaOp, ddb: XlaOp,
-    w: int, h: int, enable_db: bool,
+    builder: XlaBuilder,
+    tex: XlaOp,
+    uv: XlaOp,
+    dy: XlaOp,
+    filter_mode_enum: int,
+    boundary_mode_enum: int,
     *args: Any
 ):
-    shape_pos = c.get_shape(pos)
-    shape_tri = c.get_shape(tri)
-    dims_pos = shape_pos.dimensions()
-    dims_tri = shape_tri.dimensions()
-
-    instance_mode = len(dims_pos) > 2
-    N = c.get_shape(out).dimensions()[0]
-    if instance_mode:
-        V, F = dims_pos[1], dims_tri[0]
-        pos_count = N * V * 4
-        vtx_per_instance = V
-    else:
-        V, F = dims_pos[0], dims_tri[0]  # type: ignore
-        pos_count = V * 4
-        vtx_per_instance = 0
+    shape_tex = builder.get_shape(tex)
+    shape_uv = builder.get_shape(uv)
+    shape_dy = builder.get_shape(dy)
+    dims_tex = shape_tex.dimensions()
+    dims_uv = shape_uv.dimensions()
+    dims_dy = shape_dy.dimensions()
 
     # Encapsulate the information using the 'opaque' parameter
     opaque = _impl_jax.build_texture_descriptor(
-        num_vertices=V,
-        num_triangles=F,
-        width=w, height=h, depth=N,
-        enable_db=enable_db,
-        instance_mode=instance_mode,
-        pos_count=pos_count,
-        tri_count=F*3,
-        vtx_per_instance=vtx_per_instance,
+        filter_mode=filter_mode_enum,
+        boundary_mode=boundary_mode_enum,
+        tex_n=dims_tex[0],
+        tex_h=dims_tex[1],
+        tex_w=dims_tex[2],
+        tex_c=dims_tex[3],
+        uv_n=dims_uv[0],
+        uv_h=dims_uv[1],
+        uv_w=dims_uv[2],
     )
 
-    operands = (pos, tri, out, dy, ddb)
+    operands = (tex, uv, dy)
     return xla_client.ops.CustomCallWithLayout(
-        c,
+        builder,
         b"texture_bwd",
         operands=operands,
-        operand_shapes_with_layout=tuple([c.get_shape(x) for x in operands]),
-        shape_with_layout=xla_client.Shape.tuple_shape((shape_pos,)),
+        operand_shapes_with_layout=tuple([builder.get_shape(x) for x in operands]),
+        shape_with_layout=xla_client.Shape.tuple_shape((shape_tex, shape_uv)),
         opaque=opaque,
     )
 

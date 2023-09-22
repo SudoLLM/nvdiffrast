@@ -7,6 +7,7 @@
 #include "jax_rasterize.h"
 #include "jax_interpolate.h"
 #include "jax_antialias.h"
+#include "jax_texture.h"
 #include "pybind11_kernel_helpers.h"
 #include <glog/logging.h>
 
@@ -24,6 +25,8 @@ pybind11::dict Registrations() {
     dict["antialias_fwd"] = EncapsulateFunction(antialiasFwd);
     dict["antialias_bwd"] = EncapsulateFunction(antialiasBwd);
     dict["antialias_get_ev_hash"] = EncapsulateFunction(antialiasConstructTopologyHash);
+    dict["texture_fwd"] = EncapsulateFunction(textureFwd);
+    dict["texture_bwd"] = EncapsulateFunction(textureLinearBwd);
     return dict;
 }
 
