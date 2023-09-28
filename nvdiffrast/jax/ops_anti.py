@@ -3,9 +3,9 @@ from typing import Tuple
 
 import jax
 import jax.numpy as jnp
+from jax.core import ShapedArray
 from jax.lib import xla_client
 from jax.interpreters import xla
-from jax.abstract_arrays import ShapedArray
 from jaxlib.xla_extension import XlaBuilder
 
 from .build import _impl_jax  # TODO: setup.py changes dir
