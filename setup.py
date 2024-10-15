@@ -24,28 +24,32 @@ setuptools.setup(
     url="https://github.com/NVlabs/nvdiffrast",
     packages=setuptools.find_packages(),
     package_data={
-        'nvdiffrast': [
-            'common/*.h',
-            'common/*.inl',
-            'common/*.cu',
-            'common/*.cpp',
-            'common/cudaraster/*.hpp',
-            'common/cudaraster/impl/*.cpp',
-            'common/cudaraster/impl/*.hpp',
-            'common/cudaraster/impl/*.inl',
-            'common/cudaraster/impl/*.cu',
-            'lib/*.h',
-            'torch/*.h',
-            'torch/*.inl',
-            'torch/*.cpp',
-            'tensorflow/*.cu',
-        ] + (['lib/*.lib'] if os.name == 'nt' else [])
+        "nvdiffrast": [
+            "common/*.h",
+            "common/*.inl",
+            "common/*.cu",
+            "common/*.cpp",
+            "common/cudaraster/*.hpp",
+            "common/cudaraster/impl/*.cpp",
+            "common/cudaraster/impl/*.hpp",
+            "common/cudaraster/impl/*.inl",
+            "common/cudaraster/impl/*.cu",
+            "lib/*.h",
+            "torch/*.h",
+            "torch/*.inl",
+            "torch/*.cpp",
+            "tensorflow/*.cu",
+            "jax/build/*.so",
+        ]
+        + (["lib/*.lib"] if os.name == "nt" else [])
     },
     include_package_data=True,
-    install_requires=['numpy'],  # note: can't require torch here as it will install torch even for a TensorFlow container
+    install_requires=[
+        "numpy"
+    ],  # note: can't require torch here as it will install torch even for a TensorFlow container
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
+    python_requires=">=3.6",
 )
